@@ -1,0 +1,16 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Signing material and secrets
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+*.cer
+*.key
+.env
+.env.*
+Secrets/
