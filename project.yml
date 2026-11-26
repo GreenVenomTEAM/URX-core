@@ -9,6 +9,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: "URX Core"
+    INFOPLIST_KEY_UIRequiresFullScreen: YES
 targets:
   URXCore:
     type: application
