@@ -74,9 +74,12 @@ struct GuestWorkspaceView: View {
 struct PackageView: View {
     var body: some View {
         NavigationStack {
-            ContentUnavailableView { Label("No packages yet", systemImage: "shippingbox") } description: {
+            VStack(spacing: 12) {
+                Image(systemName: "shippingbox").font(.system(size: 42)).foregroundStyle(.secondary)
+                Text("No packages yet").font(.headline)
                 Text("The prototype does not install or execute .deb packages. A future milestone will parse package metadata and dependencies without running package scripts.")
-            }.navigationTitle("Packages")
+                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).navigationTitle("Packages")
         }
     }
 }
