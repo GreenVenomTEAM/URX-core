@@ -196,43 +196,102 @@ struct GuestWorkspaceView: View {
                 if let workspaceURL {
                     GuestDirectoryView(directoryURL: workspaceURL)
                 } else if let setupError {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 14) {
                         Image(systemName: "externaldrive.badge.exclamationmark")
-                            .font(.system(size: 38))
+                            .font(.system(size: 42))
                             .foregroundStyle(.secondary)
                         Text("Workspace unavailable").font(.headline)
                         Text(setupError)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                        Button("Try again", action: loadWorkspace)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
                     }
                     .padding()
                 } else {
-                    ProgressView("Preparing guest workspace…")
+                    VStack(spacing: 18) {
+                        Image(systemName: "externaldrive")
+                            .font(.system(size: 52, weight: .light))
+                            .foregroundStyle(.green)
+                        Text("Your private guest space")
+                            .font(.title2.bold())
+                        Text("Create a workspace to manage folders and files stored locally in the URX Core app folder.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                        Button(action: createWorkspace) {
+                            Label("Create sandbox", systemImage: "plus.square.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 7)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle("Guest")
-            .onAppear(perform: prepareWorkspace)
+            .onAppear(perform: loadWorkspace)
         }
     }
 
-    private func prepareWorkspace() {
-        guard workspaceURL == nil, setupError == nil else { return }
+    private func documentsDirectory() throws -> URL {
+        try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+    }
+
+    private func loadWorkspace() {
+        guard workspaceURL == nil else { return }
         do {
-            let base = try FileManager.default.url(
+            let directory = try documentsDirectory().appendingPathComponent("GuestWorkspace", isDirectory: true)
+            if FileManager.default.fileExists(atPath: directory.path) {
+                workspaceURL = directory
+            } else {
+                setupError = nil
+            }
+        } catch {
+            setupError = "Could not access the app's Documents folder: \(error.localizedDescription)"
+        }
+    }
+
+    private func createWorkspace() {
+        do {
+            let directory = try documentsDirectory().appendingPathComponent("GuestWorkspace", isDirectory: true)
+            let manager = FileManager.default
+            if !manager.fileExists(atPath: directory.path) {
+                try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+            }
+
+            // Preserve files from the earlier private Application Support workspace.
+            let support = try manager.url(
                 for: .applicationSupportDirectory,
                 in: .userDomainMask,
                 appropriateFor: nil,
                 create: true
-            )
-            let directory = base.appendingPathComponent("GuestWorkspace", isDirectory: true)
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
+            ).appendingPathComponent("GuestWorkspace", isDirectory: true)
+
+            if manager.fileExists(atPath: support.path) {
+                let oldItems = try manager.contentsOfDirectory(at: support, includingPropertiesForKeys: nil)
+                for item in oldItems {
+                    let destination = directory.appendingPathComponent(item.lastPathComponent)
+                    if !manager.fileExists(atPath: destination.path) {
+                        try manager.moveItem(at: item, to: destination)
+                    }
+                }
+            }
             workspaceURL = directory
+            setupError = nil
         } catch {
-            setupError = "Could not prepare the private workspace: \(error.localizedDescription)"
+            setupError = "Could not create the sandbox: \(error.localizedDescription)"
         }
     }
 }
