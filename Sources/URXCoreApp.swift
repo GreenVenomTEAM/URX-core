@@ -188,39 +188,200 @@ struct DashboardView: View {
 
 struct GuestWorkspaceView: View {
     @State private var workspaceURL: URL?
-    @State private var message = "No guest workspace created yet."
+    @State private var setupError: String?
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Local workspace") {
-                    Text(message).font(.footnote).foregroundStyle(.secondary)
-                    Button { createWorkspace() } label: {
-                        Label("Create guest workspace", systemImage: "plus.square")
-                    }
-                    .disabled(workspaceURL != nil)
-                    if let workspaceURL {
-                        Text(workspaceURL.lastPathComponent).font(.caption.monospaced())
-                    }
-                }
-                Section("Isolation") {
-                    Text("This is an ordinary directory inside URX Core's app container, not a virtualized copy of iOS. It cannot access host system files.")
-                        .font(.footnote)
+            Group {
+                if let workspaceURL {
+                    GuestDirectoryView(directoryURL: workspaceURL)
+                } else if let setupError {
+                    ContentUnavailableView(
+                        "Workspace unavailable",
+                        systemImage: "externaldrive.badge.exclamationmark",
+                        description: Text(setupError)
+                    )
+                } else {
+                    ProgressView("Preparing guest workspace…")
                 }
             }
             .navigationTitle("Guest")
+            .onAppear(perform: prepareWorkspace)
         }
     }
 
-    private func createWorkspace() {
+    private func prepareWorkspace() {
+        guard workspaceURL == nil, setupError == nil else { return }
         do {
-            let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            let base = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
             let directory = base.appendingPathComponent("GuestWorkspace", isDirectory: true)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
             workspaceURL = directory
-            message = "Guest workspace is ready inside the app container."
         } catch {
-            message = "Could not create workspace: \(error.localizedDescription)"
+            setupError = "Could not prepare the private workspace: \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct GuestDirectoryView: View {
+    let directoryURL: URL
+
+    @State private var items: [URL] = []
+    @State private var showingCreateMenu = false
+    @State private var showingNamePrompt = false
+    @State private var createFolder = true
+    @State private var newName = ""
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 10) {
+                    Image(systemName: "lock.shield.fill")
+                        .foregroundStyle(.green)
+                    Text("Private to URX Core")
+                        .font(.footnote.weight(.medium))
+                    Spacer()
+                    Text("LOCAL")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.green)
+                }
+                .listRowBackground(Color(uiColor: .secondarySystemBackground))
+            }
+
+            Section("CONTENTS") {
+                if items.isEmpty {
+                    ContentUnavailableView(
+                        "This folder is empty",
+                        systemImage: "folder",
+                        description: Text("Create a folder or a text file to get started.")
+                    )
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(items, id: \.standardizedFileURL) { item in
+                        if isDirectory(item) {
+                            NavigationLink(destination: GuestDirectoryView(directoryURL: item)) {
+                                Label(item.lastPathComponent, systemImage: "folder.fill")
+                                    .foregroundStyle(.primary)
+                            }
+                        } else {
+                            Label(item.lastPathComponent, systemImage: "doc.text")
+                        }
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        createFolder = true
+                        newName = ""
+                        showingNamePrompt = true
+                    } label: {
+                        Label("New folder", systemImage: "folder.badge.plus")
+                    }
+                    Button {
+                        createFolder = false
+                        newName = ""
+                        showingNamePrompt = true
+                    } label: {
+                        Label("New text file", systemImage: "doc.badge.plus")
+                    }
+                    Divider()
+                    Button {
+                        refreshItems()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline)
+                }
+                .tint(.green)
+            }
+        }
+        .onAppear(perform: refreshItems)
+        .alert(createFolder ? "New folder" : "New text file", isPresented: $showingNamePrompt) {
+            TextField("Name", text: $newName)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Create", action: createItem)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(createFolder ? "Choose a name for this folder." : "Choose a name for the text file.")
+        }
+    }
+
+    private func refreshItems() {
+        do {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: [.isDirectoryKey, .isHiddenKey],
+                options: [.skipsHiddenFiles]
+            )
+            items = urls.sorted {
+                let leftIsDirectory = isDirectory($0)
+                let rightIsDirectory = isDirectory($1)
+                if leftIsDirectory != rightIsDirectory {
+                    return leftIsDirectory && !rightIsDirectory
+                }
+                return $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
+            }
+            errorMessage = nil
+        } catch {
+            errorMessage = "Could not read this folder: \(error.localizedDescription)"
+        }
+    }
+
+    private func isDirectory(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+    }
+
+    private func createItem() {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty,
+              name != ".",
+              name != "..",
+              !name.contains("/"),
+              !name.contains("\\") else {
+            errorMessage = "Use a non-empty name without path separators."
+            return
+        }
+
+        let fileName = createFolder || name.lowercased().hasSuffix(".txt") ? name : name + ".txt"
+        let destination = directoryURL.appendingPathComponent(fileName, isDirectory: createFolder)
+
+        do {
+            if createFolder {
+                try FileManager.default.createDirectory(
+                    at: destination,
+                    withIntermediateDirectories: false
+                )
+            } else {
+                try Data().write(to: destination, options: .withoutOverwriting)
+            }
+            refreshItems()
+        } catch {
+            errorMessage = "Could not create item: \(error.localizedDescription)"
         }
     }
 }
