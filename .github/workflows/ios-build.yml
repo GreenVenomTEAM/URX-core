@@ -41,6 +41,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Ensure Files app sharing keys are present
+        run: |
+          APP_PATH="$RUNNER_TEMP/URXCore-DerivedData/Build/Products/Release-iphoneos/URXCore.app"
+          /usr/libexec/PlistBuddy -c "Set :UIFileSharingEnabled true" "$APP_PATH/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :LSSupportsOpeningDocumentsInPlace true" "$APP_PATH/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$APP_PATH/Info.plist"
+
       - name: Verify iPhone and iPad device family in app bundle
         run: |
           APP_PATH="$RUNNER_TEMP/URXCore-DerivedData/Build/Products/Release-iphoneos/URXCore.app"
@@ -52,6 +58,12 @@ jobs:
           print("UIDeviceFamily:", families)
           print("UIRequiresFullScreen:", info.get("UIRequiresFullScreen"))
           print("UILaunchScreen:", info.get("UILaunchScreen"))
+          print("UIFileSharingEnabled:", info.get("UIFileSharingEnabled"))
+          print("LSSupportsOpeningDocumentsInPlace:", info.get("LSSupportsOpeningDocumentsInPlace"))
+          if info.get("UIFileSharingEnabled") is not True:
+              raise SystemExit("ERROR: UIFileSharingEnabled is missing or false.")
+          if info.get("LSSupportsOpeningDocumentsInPlace") is not True:
+              raise SystemExit("ERROR: LSSupportsOpeningDocumentsInPlace is missing or false.")
           if not any(k in info for k in ("UILaunchScreen", "UILaunchStoryboardName", "UILaunchStoryboards", "UILaunchScreens")):
               raise SystemExit("ERROR: Missing launch screen configuration in Info.plist.")
           if 1 not in families:
