@@ -267,5 +267,5 @@ struct CertificateImportView: View {
         default:
             return "PKCS#12 verification failed. Security status: \(status)."
         }
-    }}
+    }
 }
