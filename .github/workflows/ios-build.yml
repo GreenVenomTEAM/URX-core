@@ -41,6 +41,22 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Verify iPhone and iPad device family in app bundle
+        run: |
+          APP_PATH="$RUNNER_TEMP/URXCore-DerivedData/Build/Products/Release-iphoneos/URXCore.app"
+          python3 - "$APP_PATH/Info.plist" <<'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as f:
+              info = plistlib.load(f)
+          families = info.get("UIDeviceFamily", [])
+          print("UIDeviceFamily:", families)
+          print("UIRequiresFullScreen:", info.get("UIRequiresFullScreen"))
+          if 1 not in families:
+              raise SystemExit("ERROR: iPhone is missing from UIDeviceFamily; app would launch in iPad compatibility mode.")
+          if 2 not in families:
+              raise SystemExit("ERROR: iPad is missing from UIDeviceFamily.")
+          PY
+
       - name: Package unsigned IPA
         run: |
           APP_PATH="$RUNNER_TEMP/URXCore-DerivedData/Build/Products/Release-iphoneos/URXCore.app"
