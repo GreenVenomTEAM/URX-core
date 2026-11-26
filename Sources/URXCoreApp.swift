@@ -12,17 +12,23 @@ struct URXCoreApp: App {
 
 struct RootView: View {
     var body: some View {
-        TabView {
-            DashboardView()
-                .tabItem { Label("Overview", systemImage: "square.grid.2x2.fill") }
-            GuestWorkspaceView()
-                .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
-            PackageView()
-                .tabItem { Label("Packages", systemImage: "shippingbox.fill") }
-            CertificateImportView()
-                .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
+        GeometryReader { geometry in
+            TabView {
+                DashboardView()
+                    .tabItem { Label("Overview", systemImage: "square.grid.2x2.fill") }
+                GuestWorkspaceView()
+                    .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
+                PackageView()
+                    .tabItem { Label("Packages", systemImage: "shippingbox.fill") }
+                CertificateImportView()
+                    .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
+            }
+            .tint(Color(red: 0.35, green: 0.95, blue: 0.55))
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .background(Color.black.ignoresSafeArea())
         }
-        .tint(Color(red: 0.35, green: 0.95, blue: 0.55))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.ignoresSafeArea())
     }
 }
 
