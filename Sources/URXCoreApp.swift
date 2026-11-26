@@ -579,15 +579,29 @@ struct PackageView: View {
                                 }
                             }
 
-                            if !metadata.dependencies.isEmpty {
+                            if !metadata.dependencyGroups.isEmpty {
                                 Divider().overlay(.white.opacity(0.08))
                                 Text("DEPENDENCIES")
                                     .font(.caption.weight(.bold))
                                     .tracking(1)
                                     .foregroundStyle(.secondary)
-                                ForEach(metadata.dependencies, id: \.self) { dependency in
-                                    Label(dependency, systemImage: "arrow.triangle.branch")
-                                        .font(.footnote.monospaced())
+                                ForEach(Array(metadata.dependencyGroups.enumerated()), id: \.offset) { index, group in
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text("GROUP \(index + 1)")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.secondary)
+                                        ForEach(Array(group.alternatives.enumerated()), id: \.offset) { alternativeIndex, requirement in
+                                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                                Text(alternativeIndex == 0 ? "•" : "OR")
+                                                    .font(.caption2.weight(.bold))
+                                                    .foregroundStyle(alternativeIndex == 0 ? .green : .orange)
+                                                Text(requirement.display)
+                                                    .font(.footnote.monospaced())
+                                                    .textSelection(.enabled)
+                                            }
+                                        }
+                                    }
+                                    .padding(.vertical, 3)
                                 }
                             } else {
                                 Text("No dependencies declared.")
@@ -637,6 +651,21 @@ struct PackageView: View {
     }
 }
 
+private struct DebianDependencyRequirement {
+    let name: String
+    let operatorText: String?
+    let version: String?
+
+    var display: String {
+        guard let operatorText, let version else { return name }
+        return "\(name) (\(operatorText) \(version))"
+    }
+}
+
+private struct DebianDependencyGroup {
+    let alternatives: [DebianDependencyRequirement]
+}
+
 private struct DebianPackageMetadata {
     let name: String
     let version: String
@@ -644,7 +673,7 @@ private struct DebianPackageMetadata {
     let maintainer: String
     let section: String
     let description: String
-    let dependencies: [String]
+    let dependencyGroups: [DebianDependencyGroup]
 }
 
 private enum DebianControlParser {
@@ -704,16 +733,7 @@ private enum DebianControlParser {
         }
 
         let dependencyText = fields["depends"] ?? ""
-        let dependencies = dependencyText
-            .split(separator: ",")
-            .map { component -> String in
-                let firstAlternative = component.split(separator: "|", maxSplits: 1).first ?? component[...]
-                let withoutConstraint = firstAlternative
-                    .split(whereSeparator: { $0 == "(" || $0 == "[" || $0 == "<" })
-                    .first ?? firstAlternative
-                return withoutConstraint.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            .filter { !$0.isEmpty }
+        let dependencyGroups = try parseDependencyGroups(dependencyText)
 
         return DebianPackageMetadata(
             name: try required("package"),
@@ -722,7 +742,73 @@ private enum DebianControlParser {
             maintainer: fields["maintainer"] ?? "",
             section: fields["section"] ?? "",
             description: (fields["description"] ?? "").replacingOccurrences(of: "\n", with: " "),
-            dependencies: dependencies
+            dependencyGroups: dependencyGroups
         )
+    }
+
+    private static func parseDependencyGroups(_ source: String) throws -> [DebianDependencyGroup] {
+        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        let groupStrings = splitTopLevel(source, separator: ",")
+        return try groupStrings.map { groupText in
+            let alternatives = splitTopLevel(groupText, separator: "|")
+            let requirements = try alternatives.map { rawRequirement -> DebianDependencyRequirement in
+                let requirement = rawRequirement.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !requirement.isEmpty else {
+                    throw ParseError.malformedLine(1)
+                }
+
+                guard let openParen = requirement.firstIndex(of: "(") else {
+                    return DebianDependencyRequirement(name: requirement, operatorText: nil, version: nil)
+                }
+                guard let closeParen = requirement[openParen...].firstIndex(of: ")") else {
+                    throw ParseError.malformedLine(1)
+                }
+
+                let name = requirement[..<openParen].trimmingCharacters(in: .whitespaces)
+                let constraint = requirement[requirement.index(after: openParen)..<closeParen]
+                    .trimmingCharacters(in: .whitespaces)
+                let pieces = constraint.split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
+                guard !name.isEmpty, pieces.count == 2 else {
+                    throw ParseError.malformedLine(1)
+                }
+                let allowedOperators: Set<String> = [">>", ">=", "=", "<=", "<<"]
+                let operatorText = String(pieces[0])
+                let version = String(pieces[1])
+                guard allowedOperators.contains(operatorText), !version.isEmpty else {
+                    throw ParseError.malformedLine(1)
+                }
+                return DebianDependencyRequirement(name: name, operatorText: operatorText, version: version)
+            }
+            return DebianDependencyGroup(alternatives: requirements)
+        }
+    }
+
+    private static func splitTopLevel(_ source: String, separator: Character) -> [String] {
+        var parts: [String] = []
+        var current = ""
+        var depth = 0
+
+        for character in source {
+            if character == "(" || character == "[" {
+                depth += 1
+            } else if character == ")" || character == "]" {
+                depth = max(0, depth - 1)
+            }
+
+            if character == separator && depth == 0 {
+                parts.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+                current = ""
+            } else {
+                current.append(character)
+            }
+        }
+
+        if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return parts
     }
 }
