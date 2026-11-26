@@ -300,7 +300,6 @@ private struct GuestDirectoryView: View {
     let directoryURL: URL
 
     @State private var items: [URL] = []
-    @State private var showingCreateMenu = false
     @State private var showingNamePrompt = false
     @State private var createFolder = true
     @State private var newName = ""
@@ -323,7 +322,41 @@ private struct GuestDirectoryView: View {
                 .listRowBackground(Color(uiColor: .secondarySystemBackground))
             }
 
-            Section("CONTENTS") {
+            Section {
+                HStack {
+                    Text("CONTENTS")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Menu {
+                        Button {
+                            createFolder = true
+                            newName = ""
+                            showingNamePrompt = true
+                        } label: {
+                            Label("New folder", systemImage: "folder.badge.plus")
+                        }
+                        Button {
+                            createFolder = false
+                            newName = ""
+                            showingNamePrompt = true
+                        } label: {
+                            Label("New text file", systemImage: "doc.badge.plus")
+                        }
+                        Divider()
+                        Button {
+                            refreshItems()
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                    } label: {
+                        Label("Create", systemImage: "plus.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .tint(.green)
+                }
+                .listRowBackground(Color.clear)
+
                 if items.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "folder")
@@ -361,36 +394,6 @@ private struct GuestDirectoryView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button {
-                        createFolder = true
-                        newName = ""
-                        showingNamePrompt = true
-                    } label: {
-                        Label("New folder", systemImage: "folder.badge.plus")
-                    }
-                    Button {
-                        createFolder = false
-                        newName = ""
-                        showingNamePrompt = true
-                    } label: {
-                        Label("New text file", systemImage: "doc.badge.plus")
-                    }
-                    Divider()
-                    Button {
-                        refreshItems()
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.headline)
-                }
-                .tint(.green)
-            }
-        }
         .onAppear(perform: refreshItems)
         .alert(createFolder ? "New folder" : "New text file", isPresented: $showingNamePrompt) {
             TextField("Name", text: $newName)
