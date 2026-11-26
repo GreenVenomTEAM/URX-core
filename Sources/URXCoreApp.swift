@@ -462,21 +462,267 @@ private struct GuestDirectoryView: View {
 }
 
 struct PackageView: View {
+    @State private var controlText = ""
+    @State private var metadata: DebianPackageMetadata?
+    @State private var parseError: String?
+
+    private let sample = """
+    Package: example-tool
+    Version: 1.2.0-1
+    Architecture: iphoneos-arm64
+    Maintainer: Example Team
+    Section: Utilities
+    Description: A sample package for metadata inspection
+     This is a second line of the description.
+    Depends: libexample (>= 2.0), another-package | alternative-package
+    """
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                Image(systemName: "shippingbox")
-                    .font(.system(size: 42))
-                    .foregroundStyle(.secondary)
-                Text("No packages yet").font(.headline)
-                Text("The prototype does not install or execute .deb packages. A future milestone will parse package metadata and dependencies without running package scripts.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("METADATA INSPECTOR")
+                            .font(.caption.weight(.bold))
+                            .tracking(1.2)
+                            .foregroundStyle(.green)
+                        Text("Inspect Debian package control metadata without installing or running anything.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("CONTROL DATA")
+                                .font(.caption.weight(.bold))
+                                .tracking(1)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Load example") {
+                                controlText = sample
+                                metadata = nil
+                                parseError = nil
+                            }
+                            .font(.caption.weight(.semibold))
+                            .tint(.green)
+                        }
+
+                        TextEditor(text: $controlText)
+                            .font(.system(.footnote, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .frame(minHeight: 230)
+                            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.08), lineWidth: 1))
+
+                        Button(action: inspectMetadata) {
+                            Label("Inspect metadata", systemImage: "doc.text.magnifyingglass")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                        .disabled(controlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemBackground).opacity(0.55), in: RoundedRectangle(cornerRadius: 20))
+
+                    if let parseError {
+                        Label(parseError, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    if let metadata {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Text("PACKAGE DETAILS")
+                                    .font(.caption.weight(.bold))
+                                    .tracking(1)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("PARSED")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.green)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(.green.opacity(0.12), in: Capsule())
+                            }
+
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(metadata.name)
+                                    .font(.title2.bold())
+                                Text(metadata.version)
+                                    .font(.subheadline.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            metadataRow("Architecture", value: metadata.architecture)
+                            if !metadata.maintainer.isEmpty {
+                                metadataRow("Maintainer", value: metadata.maintainer)
+                            }
+                            if !metadata.section.isEmpty {
+                                metadataRow("Section", value: metadata.section)
+                            }
+                            if !metadata.description.isEmpty {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("DESCRIPTION")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(.secondary)
+                                    Text(metadata.description)
+                                        .font(.footnote)
+                                        .textSelection(.enabled)
+                                }
+                            }
+
+                            if !metadata.dependencies.isEmpty {
+                                Divider().overlay(.white.opacity(0.08))
+                                Text("DEPENDENCIES")
+                                    .font(.caption.weight(.bold))
+                                    .tracking(1)
+                                    .foregroundStyle(.secondary)
+                                ForEach(metadata.dependencies, id: \.self) { dependency in
+                                    Label(dependency, systemImage: "arrow.triangle.branch")
+                                        .font(.footnote.monospaced())
+                                }
+                            } else {
+                                Text("No dependencies declared.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(uiColor: .secondarySystemBackground).opacity(0.55), in: RoundedRectangle(cornerRadius: 20))
+                    }
+
+                    Label("Read-only inspection. No package installation, scripts, or system modifications.", systemImage: "lock.shield.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                }
+                .padding(16)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Packages")
+            .navigationBarTitleDisplayMode(.large)
         }
+    }
+
+    private func metadataRow(_ title: String, value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.footnote.weight(.medium))
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func inspectMetadata() {
+        do {
+            metadata = try DebianControlParser.parse(controlText)
+            parseError = nil
+        } catch {
+            metadata = nil
+            parseError = error.localizedDescription
+        }
+    }
+}
+
+private struct DebianPackageMetadata {
+    let name: String
+    let version: String
+    let architecture: String
+    let maintainer: String
+    let section: String
+    let description: String
+    let dependencies: [String]
+}
+
+private enum DebianControlParser {
+    enum ParseError: LocalizedError {
+        case missingField(String)
+        case malformedLine(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingField(let field):
+                return "Required field is missing: \(field)"
+            case .malformedLine(let line):
+                return "Could not read control data near line \(line). Check the field format."
+            }
+        }
+    }
+
+    static func parse(_ source: String) throws -> DebianPackageMetadata {
+        var fields: [String: String] = [:]
+        var currentKey: String?
+        let lines = source.components(separatedBy: .newlines)
+
+        for (index, rawLine) in lines.enumerated() {
+            if rawLine.isEmpty || rawLine.trimmingCharacters(in: .whitespaces).isEmpty {
+                continue
+            }
+            if rawLine.hasPrefix("#") {
+                continue
+            }
+
+            if rawLine.hasPrefix(" ") || rawLine.hasPrefix("\t") {
+                guard let key = currentKey else {
+                    throw ParseError.malformedLine(index + 1)
+                }
+                let continuation = String(rawLine.dropFirst()).trimmingCharacters(in: .newlines)
+                fields[key, default: ""] += "\n" + continuation
+                continue
+            }
+
+            guard let colon = rawLine.firstIndex(of: ":") else {
+                throw ParseError.malformedLine(index + 1)
+            }
+            let key = rawLine[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            let value = rawLine[rawLine.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            guard !key.isEmpty else {
+                throw ParseError.malformedLine(index + 1)
+            }
+            fields[key] = value
+            currentKey = key
+        }
+
+        func required(_ key: String) throws -> String {
+            guard let value = fields[key], !value.isEmpty else {
+                throw ParseError.missingField(key.capitalized)
+            }
+            return value
+        }
+
+        let dependencyText = fields["depends"] ?? ""
+        let dependencies = dependencyText
+            .split(separator: ",")
+            .map { component -> String in
+                let firstAlternative = component.split(separator: "|", maxSplits: 1).first ?? component[...]
+                let withoutConstraint = firstAlternative
+                    .split(whereSeparator: { $0 == "(" || $0 == "[" || $0 == "<" })
+                    .first ?? firstAlternative
+                return withoutConstraint.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
+
+        return DebianPackageMetadata(
+            name: try required("package"),
+            version: try required("version"),
+            architecture: try required("architecture"),
+            maintainer: fields["maintainer"] ?? "",
+            section: fields["section"] ?? "",
+            description: (fields["description"] ?? "").replacingOccurrences(of: "\n", with: " "),
+            dependencies: dependencies
+        )
     }
 }
