@@ -196,11 +196,17 @@ struct GuestWorkspaceView: View {
                 if let workspaceURL {
                     GuestDirectoryView(directoryURL: workspaceURL)
                 } else if let setupError {
-                    ContentUnavailableView(
-                        "Workspace unavailable",
-                        systemImage: "externaldrive.badge.exclamationmark",
-                        description: Text(setupError)
-                    )
+                    VStack(spacing: 12) {
+                        Image(systemName: "externaldrive.badge.exclamationmark")
+                            .font(.system(size: 38))
+                            .foregroundStyle(.secondary)
+                        Text("Workspace unavailable").font(.headline)
+                        Text(setupError)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
                 } else {
                     ProgressView("Preparing guest workspace…")
                 }
@@ -260,11 +266,18 @@ private struct GuestDirectoryView: View {
 
             Section("CONTENTS") {
                 if items.isEmpty {
-                    ContentUnavailableView(
-                        "This folder is empty",
-                        systemImage: "folder",
-                        description: Text("Create a folder or a text file to get started.")
-                    )
+                    VStack(spacing: 10) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 30))
+                            .foregroundStyle(.secondary)
+                        Text("This folder is empty").font(.headline)
+                        Text("Create a folder or a text file to get started.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 22)
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(items, id: \.standardizedFileURL) { item in
@@ -290,7 +303,7 @@ private struct GuestDirectoryView: View {
         }
         .listStyle(.insetGrouped)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
                         createFolder = true
