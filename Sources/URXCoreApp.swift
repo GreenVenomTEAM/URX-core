@@ -6,7 +6,6 @@ struct URXCoreApp: App {
         WindowGroup {
             RootView()
                 .preferredColorScheme(.dark)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -15,105 +14,169 @@ struct RootView: View {
     var body: some View {
         TabView {
             DashboardView()
-                .tabItem { Label("Overview", systemImage: "square.grid.2x2") }
+                .tabItem { Label("Overview", systemImage: "square.grid.2x2.fill") }
             GuestWorkspaceView()
-                .tabItem { Label("Guest", systemImage: "externaldrive") }
+                .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
             PackageView()
-                .tabItem { Label("Packages", systemImage: "shippingbox") }
+                .tabItem { Label("Packages", systemImage: "shippingbox.fill") }
             CertificateImportView()
-                .tabItem { Label("Identity", systemImage: "checkmark.seal") }
+                .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
         }
-        .tint(.green)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .tint(Color(red: 0.35, green: 0.95, blue: 0.55))
     }
 }
 
 struct DashboardView: View {
+    private let accent = Color(red: 0.35, green: 0.95, blue: 0.55)
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    hero
+                    HStack(spacing: 12) {
+                        metricCard("GUEST", value: "LOCAL", detail: "App container", icon: "externaldrive.fill")
+                        metricCard("IDENTITY", value: "OPTIONAL", detail: "P12 inspection", icon: "checkmark.seal")
+                    }
+                    sectionTitle("CORE COMPONENTS")
+                    VStack(spacing: 0) {
+                        componentRow("Guest workspace", subtitle: "Private storage inside URX Core", symbol: "externaldrive.fill", state: "READY", stateColor: accent)
+                        Divider().overlay(.white.opacity(0.08)).padding(.leading, 58)
+                        componentRow("Package manager", subtitle: "Metadata support is planned", symbol: "shippingbox.fill", state: "PLANNED", stateColor: .orange)
+                        Divider().overlay(.white.opacity(0.08)).padding(.leading, 58)
+                        componentRow("Tweak runtime", subtitle: "Not available in this prototype", symbol: "puzzlepiece.extension", state: "NOT BUILT", stateColor: .secondary)
+                    }
+                    .background(Color(uiColor: .secondarySystemBackground).opacity(0.75), in: RoundedRectangle(cornerRadius: 22))
+                    sectionTitle("PROJECT NOTES")
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("URX CORE")
-                            .font(.system(size: 34, weight: .black, design: .rounded))
-                            .foregroundStyle(.green)
-                        Text("Unc0veR rEb0rnEd X Core")
-                            .font(.title3.weight(.semibold))
-                        Text("GreenVenom Team")
+                        Label("Host iOS stays untouched", systemImage: "lock.shield.fill")
+                            .font(.headline)
+                            .foregroundStyle(accent)
+                        Text("URX Core is an app-contained research environment. It is not a jailbreak or a virtualized copy of iOS, and it cannot run arbitrary system tweaks.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(22)
-                    .background(Color.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 22))
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        sectionHeading("ENVIRONMENT")
-                        statusRow("Host iOS remains untouched", detail: "The host device is not modified.", icon: "lock.shield", color: .green)
-                        Divider().overlay(Color.white.opacity(0.08))
-                        statusRow("Guest workspace", detail: "Local app-container prototype.", icon: "externaldrive", color: .green)
-                        Divider().overlay(Color.white.opacity(0.08))
-                        statusRow("Package execution", detail: "Not implemented.", icon: "pause.circle", color: .orange)
-                    }
                     .padding(20)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        sectionHeading("PROJECT STATUS")
-                        statusLine("Foundation", value: "In progress")
-                        statusLine("Guest runtime", value: "Research")
-                        statusLine("Sileo compatibility", value: "Not evaluated")
+                    .background(Color(uiColor: .secondarySystemBackground).opacity(0.75), in: RoundedRectangle(cornerRadius: 22))
+                    HStack {
+                        Text("GREENVENOM TEAM")
+                        Spacer()
+                        Text("URX CORE • EXPERIMENTAL")
                     }
-                    .padding(20)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
-
-                    Text("URX Core is an app-contained research project. It does not jailbreak this device or enable arbitrary system tweaks.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 4)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 30)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 18)
-                .padding(.top, 16)
-                .padding(.bottom, 28)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black)
-            .navigationTitle("Dashboard")
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("URX Core")
             .navigationBarTitleDisplayMode(.large)
-        }
-    }
-
-    private func sectionHeading(_ title: String) -> some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .tracking(1.1)
-            .foregroundStyle(.secondary)
-    }
-
-    private func statusRow(_ title: String, detail: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 25, weight: .medium))
-                .foregroundStyle(color)
-                .frame(width: 38)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Image(systemName: "circle.hexagongrid.fill")
+                        .foregroundStyle(accent)
+                }
             }
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func statusLine(_ title: String, value: String) -> some View {
-        HStack {
-            Text(title).foregroundStyle(.primary)
-            Spacer()
-            Text(value).foregroundStyle(.secondary)
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Image(systemName: "circle.hexagongrid.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(accent)
+                Spacer()
+                Text("CORE ONLINE")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1)
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(accent.opacity(0.12), in: Capsule())
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Unc0veR")
+                Text("rEb0rnEd X")
+                    .foregroundStyle(accent)
+                Text("CORE")
+            }
+            .font(.system(size: 38, weight: .black, design: .rounded))
+            .lineSpacing(-4)
+            Text("A contained iOS environment research project.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.7))
+            HStack(spacing: 8) {
+                Label("GreenVenom Team", systemImage: "terminal")
+                Spacer()
+                Text("BUILD 0.1")
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white.opacity(0.55))
         }
-        .font(.subheadline)
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 26).fill(
+                    LinearGradient(colors: [Color(red: 0.05, green: 0.20, blue: 0.12), Color(red: 0.04, green: 0.07, blue: 0.06), Color(uiColor: .secondarySystemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+                Circle()
+                    .fill(accent.opacity(0.12))
+                    .frame(width: 190, height: 190)
+                    .blur(radius: 4)
+                    .offset(x: 65, y: -75)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 26).stroke(accent.opacity(0.18), lineWidth: 1))
+    }
+
+    private func metricCard(_ title: String, value: String, detail: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon).font(.title3).foregroundStyle(accent)
+            Text(title).font(.caption2.weight(.bold)).tracking(1).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 17, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.8)
+            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+        .padding(15)
+        .background(Color(uiColor: .secondarySystemBackground).opacity(0.75), in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.bold))
+            .tracking(1.4)
+            .foregroundStyle(.secondary)
+            .padding(.top, 4)
+    }
+
+    private func componentRow(_ title: String, subtitle: String, symbol: String, state: String, stateColor: Color) -> some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(accent)
+                .frame(width: 42, height: 42)
+                .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 13))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Text(state)
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(stateColor)
+                .lineLimit(1)
+        }
+        .padding(15)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
