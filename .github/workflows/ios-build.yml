@@ -51,6 +51,9 @@ jobs:
           families = info.get("UIDeviceFamily", [])
           print("UIDeviceFamily:", families)
           print("UIRequiresFullScreen:", info.get("UIRequiresFullScreen"))
+          print("UILaunchScreen:", info.get("UILaunchScreen"))
+          if not any(k in info for k in ("UILaunchScreen", "UILaunchStoryboardName", "UILaunchStoryboards", "UILaunchScreens")):
+              raise SystemExit("ERROR: Missing launch screen configuration in Info.plist.")
           if 1 not in families:
               raise SystemExit("ERROR: iPhone is missing from UIDeviceFamily; app would launch in iPad compatibility mode.")
           if 2 not in families:
