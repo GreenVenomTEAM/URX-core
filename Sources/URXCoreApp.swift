@@ -78,7 +78,7 @@ struct DashboardView: View {
             .navigationTitle("URX Core")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Image(systemName: "circle.hexagongrid.fill")
                         .foregroundStyle(accent)
                 }
