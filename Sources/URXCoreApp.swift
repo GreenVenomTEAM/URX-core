@@ -19,6 +19,8 @@ struct RootView: View {
             TabView {
                 DashboardView(accent: extensionRuntime.activeAccent)
                     .tabItem { Label("Overview", systemImage: "square.grid.2x2.fill") }
+                URXSandboxView()
+                    .tabItem { Label("Sandbox", systemImage: "square.stack.3d.up.fill") }
                 GuestWorkspaceView()
                     .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
                 PackageView()
