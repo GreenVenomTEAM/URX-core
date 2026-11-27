@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import CryptoKit
 
 private struct URXRepository: Codable, Identifiable, Hashable {
     var id: UUID
@@ -225,8 +226,23 @@ struct URXRepositoryManagerView: View {
         }
     }
 
-    private func discoverPackages(baseURL: URL) async throws -> (data: Data, count: Int, location: String) {
-        // Flat repositories are common in jailbreak package hosting.
+    private func discoverPackages(baseURL: URL) async throws -> (data: Data, count: Int, location: String, sourceSHA256: String) {
+        // Flat APT repositories (suite "./") publish Release and Packages at the root.
+        // Validate the compressed/plain bytes against Release before accepting the index.
+        let flatReleaseURL = baseURL.appendingPathComponent("Release")
+        if let releaseData = try? await fetchSmallText(flatReleaseURL),
+           let releaseText = String(data: releaseData, encoding: .utf8) {
+            let checksums = parseReleaseSHA256(releaseText)
+            for name in ["Packages.gz", "Packages"] {
+                guard let expected = checksums[name] else { continue }
+                let candidate = baseURL.appendingPathComponent(name)
+                guard let result = try? await fetchIndex(candidate),
+                      result.sourceSHA256 == expected.lowercased() else { continue }
+                return result
+            }
+        }
+
+        // Legacy flat repositories without Release metadata (metadata-only compatibility).
         let flatNames = ["Packages.gz", "Packages"]
         for name in flatNames {
             let candidate = baseURL.appendingPathComponent(name)
@@ -279,7 +295,7 @@ struct URXRepositoryManagerView: View {
         return data
     }
 
-    private func fetchIndex(_ url: URL) async throws -> (data: Data, count: Int, location: String) {
+    private func fetchIndex(_ url: URL) async throws -> (data: Data, count: Int, location: String, sourceSHA256: String) {
         let (downloaded, response) = try await performRequest(url)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw RepositoryError.notFound
@@ -287,6 +303,7 @@ struct URXRepositoryManagerView: View {
         guard !downloaded.isEmpty, downloaded.count <= maximumIndexSize else {
             throw RepositoryError.invalidSize
         }
+        let sourceSHA256 = SHA256.hash(data: downloaded).map { String(format: "%02x", $0) }.joined()
         let data: Data
         if url.pathExtension.lowercased() == "gz" {
             data = try decompressGzip(downloaded)
@@ -299,7 +316,7 @@ struct URXRepositoryManagerView: View {
         }
         let records = try URXPackageIndexParser.parse(source)
         guard !records.isEmpty else { throw RepositoryError.emptyIndex }
-        return (data, records.count, url.path)
+        return (data, records.count, url.path, sourceSHA256)
     }
 
     private func performRequest(_ url: URL) async throws -> (Data, URLResponse) {
@@ -334,6 +351,32 @@ struct URXRepositoryManagerView: View {
             }
         }
         return fields
+    }
+
+    /// Reads SHA256 entries from a Release file. Each entry is: hash size relative-path.
+    private func parseReleaseSHA256(_ text: String) -> [String: String] {
+        var result: [String: String] = [:]
+        var insideSHA256 = false
+        for line in text.components(separatedBy: .newlines) {
+            if line == "SHA256:" {
+                insideSHA256 = true
+                continue
+            }
+            if !line.hasPrefix(" ") && line.contains(":") {
+                insideSHA256 = false
+            }
+            guard insideSHA256 else { continue }
+            let parts = line.split(whereSeparator: { $0.isWhitespace })
+            guard parts.count == 3,
+                  parts[0].count == 64,
+                  parts[0].allSatisfy({ $0.isHexDigit }),
+                  let size = Int(parts[1]), size >= 0 else { continue }
+            let path = String(parts[2])
+            guard !path.hasPrefix("/"),
+                  !path.split(separator: "/").contains("..") else { continue }
+            result[path] = String(parts[0]).lowercased()
+        }
+        return result
     }
 
     private func uniqueStrings(_ values: [String]) -> [String] {
