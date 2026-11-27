@@ -241,10 +241,10 @@ struct URXAPTView: View {
     private func loadInstalledStatus() {
         do {
             let records = try URXDPKGStatusStore.load(from: packageStatusURL())
-            installedPackageIDs = Set(records.filter(\\.isInstalled).map(\\.package))
+            installedPackageIDs = Set(records.filter(\.isInstalled).map(\.package))
         } catch {
             installedPackageIDs = []
-            statusMessage = "Installed package status is unavailable: \\(error.localizedDescription)"
+            statusMessage = "Installed package status is unavailable: \(error.localizedDescription)"
         }
     }
 
