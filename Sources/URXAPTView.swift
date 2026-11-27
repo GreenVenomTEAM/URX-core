@@ -2,6 +2,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct URXAPTView: View {
+    let displayTitle: String
+
+    init(displayTitle: String = "APT") {
+        self.displayTitle = displayTitle
+    }
+
     @State private var packages: [URXPackageRecord] = []
     @State private var installedPackageIDs: Set<String> = []
     @State private var searchText = ""
@@ -101,7 +107,7 @@ struct URXAPTView: View {
                     .searchable(text: $searchText, prompt: "Package name or description")
                 }
             }
-            .navigationTitle("APT")
+            .navigationTitle(displayTitle)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
