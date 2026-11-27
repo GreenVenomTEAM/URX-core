@@ -17,10 +17,14 @@ struct URXAPTView: View {
         guard !query.isEmpty else {
             return packages.sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
         }
-        return packages.filter {
-            $0.id.localizedCaseInsensitiveContains(query) ||
-            $0.description.localizedCaseInsensitiveContains(query) ||
-            $0.maintainer.localizedCaseInsensitiveContains(query)
+        return packages.filter { package in
+            package.id.localizedCaseInsensitiveContains(query) ||
+            package.description.localizedCaseInsensitiveContains(query) ||
+            package.maintainer.localizedCaseInsensitiveContains(query) ||
+            package.provides.contains { $0.package.localizedCaseInsensitiveContains(query) } ||
+            package.fields.contains { key, value in
+                key.localizedCaseInsensitiveContains(query) || value.localizedCaseInsensitiveContains(query)
+            }
         }.sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
     }
 
