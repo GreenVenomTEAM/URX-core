@@ -14,7 +14,7 @@ struct URXDPKGStatusRecord: Identifiable, Codable, Hashable {
 
     var isInstalled: Bool {
         let parts = status.split(whereSeparator: { $0.isWhitespace })
-        return parts.count == 3 && parts[0] == "install" && parts[2] == "installed"
+        return parts.count == 3 && parts[2] == "installed"
     }
 
     var isHeld: Bool {
