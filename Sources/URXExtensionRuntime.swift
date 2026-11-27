@@ -156,7 +156,7 @@ final class URXExtensionRuntime: ObservableObject {
         UserDefaults.standard.set(Array(enabledIDs), forKey: enabledKey)
     }
 
-    static func isValidHexColor(_ value: String) -> Bool {
+    nonisolated static func isValidHexColor(_ value: String) -> Bool {
         let hex = value.hasPrefix("#") ? String(value.dropFirst()) : value
         return hex.count == 6 && hex.allSatisfy { $0.isHexDigit }
     }
