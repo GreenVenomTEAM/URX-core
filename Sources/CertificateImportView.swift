@@ -22,7 +22,7 @@ struct CertificateImportView: View {
                             .foregroundStyle(.green)
                         Text("Signing identity")
                             .font(.largeTitle.bold())
-                        Text("Select a PKCS#12 file and enter its password. URX checks it against the provisioning profile embedded in this installed app, then securely saves the identity in the iOS Keychain.")
+                        Text("Select a PKCS#12 file. Enter its password if it has one; otherwise leave the field blank. URX checks the identity against this app’s embedded provisioning profile.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -59,8 +59,8 @@ struct CertificateImportView: View {
 
                     if selectedFile != nil {
                         VStack(alignment: .leading, spacing: 14) {
-                            stepLabel("02", "ENTER PASSWORD")
-                            SecureField("P12 password", text: $password)
+                            stepLabel("02", "PASSWORD (IF REQUIRED)")
+                            SecureField("P12 password (optional)", text: $password)
                                 .textContentType(.password)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
@@ -203,7 +203,7 @@ struct CertificateImportView: View {
             }
             selectedFile = url
             password = ""
-            status = "File selected. Enter its password to verify the identity."
+            status = "File selected. Enter its password if required, or leave the field blank."
             isSuccess = false
         case .failure(let error):
             status = "Could not select file: \(error.localizedDescription)"
