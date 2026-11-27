@@ -85,7 +85,7 @@ targets:
           - "**/*.c"
         excludes:
           - "AppDelegate.swift"
-      - path: Vendor/SileoIntegration
+      - path: Vendor/SileoIntegration/SileoEmbedBootstrap.swift
     dependencies:
       - package: Cosmos
         product: Cosmos
