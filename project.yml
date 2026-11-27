@@ -74,7 +74,7 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: Sources/URXBridging.h
         OTHER_LDFLAGS: "$(inherited) -lz"
   SileoUI:
-    type: framework
+    type: static-library
     platform: iOS
     sources:
       - path: Vendor/Sileo/Sileo
