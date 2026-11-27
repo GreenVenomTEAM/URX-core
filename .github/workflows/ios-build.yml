@@ -31,7 +31,7 @@ jobs:
             "$RUNNER_TEMP/URXCore-DerivedData/SourcePackages/checkouts/Alderis/Alderis/ColorPickerInnerViewController.swift"
           python3 Scripts/patch-sileo-dpkgversion.py \
             "Vendor/Sileo/Sileo/Backend/C Contrib/dpkgversion.h"
-          python3 Scripts/patch-sileo-dpkgversion-c.py \\
+          python3 Scripts/patch-sileo-dpkgversion-c.py \
             "Vendor/Sileo/Sileo/Backend/C Contrib/dpkgversion.c"
           python3 Scripts/patch-sileo-zkswizzle-arc.py \
             "Vendor/Sileo/Sileo/UI/WhiteBlur/ZKSwizzle.m"
