@@ -1,6 +1,22 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+
+struct URXTheme: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let accentHex: String
+    let backgroundHex: String
+    let surfaceHex: String
+
+    static let presets: [URXTheme] = [
+        URXTheme(id: "midnight", name: "Midnight Blue", accentHex: "659BFF", backgroundHex: "080D18", surfaceHex: "141D2D"),
+        URXTheme(id: "neon", name: "Neon Green", accentHex: "59F28C", backgroundHex: "050D09", surfaceHex: "102219"),
+        URXTheme(id: "violet", name: "Violet Pulse", accentHex: "B58CFF", backgroundHex: "0D0918", surfaceHex: "21172F"),
+        URXTheme(id: "amber", name: "Amber Glow", accentHex: "FFB454", backgroundHex: "140D06", surfaceHex: "2A1D10")
+    ]
+}
+
 struct URXExtensionManifest: Codable, Identifiable {
     let id: String
     let name: String
@@ -53,23 +69,34 @@ final class URXExtensionRuntime: ObservableObject {
     @Published private(set) var shellGeneration = 0
     @Published var statusMessage: String?
     @Published private(set) var eventLog: [String] = []
+    @Published var selectedThemeID: String {
+        didSet { UserDefaults.standard.set(selectedThemeID, forKey: themeKey); recordEvent("Theme selected: \\(selectedTheme.name)") }
+    }
 
     private let fileManager = FileManager.default
     private let enabledKey = "URXExtensionRuntime.enabledIDs"
     private let eventLogKey = "URXExtensionRuntime.eventLog"
+    private let themeKey = "URXExtensionRuntime.selectedTheme"
+
+    let themes: [URXTheme] = URXTheme.presets
 
     init() {
+        selectedThemeID = UserDefaults.standard.string(forKey: "URXExtensionRuntime.selectedTheme") ?? URXTheme.presets[0].id
         loadExtensions()
         eventLog = UserDefaults.standard.stringArray(forKey: eventLogKey) ?? []
         recordEvent("URX Core runtime initialized")
     }
 
+    var selectedTheme: URXTheme {
+        themes.first(where: { $0.id == selectedThemeID }) ?? themes[0]
+    }
+
     var activeAccent: Color {
-        guard let manifest = extensions.first(where: { enabledIDs.contains($0.id) }),
-              let hex = manifest.accentHex else {
-            return Color(red: 0.35, green: 0.95, blue: 0.55)
+        if let manifest = extensions.first(where: { enabledIDs.contains($0.id) }),
+           let hex = manifest.accentHex {
+            return Self.color(from: hex)
         }
-        return Self.color(from: hex)
+        return Self.color(from: selectedTheme.accentHex)
     }
 
     var activeHomeLabel: String? {
