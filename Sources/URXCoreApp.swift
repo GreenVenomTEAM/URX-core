@@ -17,7 +17,7 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geometry in
             TabView {
-                DashboardView()
+                DashboardView(accent: extensionRuntime.activeAccent)
                     .tabItem { Label("Overview", systemImage: "square.grid.2x2.fill") }
                 GuestWorkspaceView()
                     .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
@@ -27,6 +27,8 @@ struct RootView: View {
                     .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension.fill") }
                 CertificateImportView()
                     .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
+                URXSettingsView(runtime: extensionRuntime)
+                    .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             }
             .tint(extensionRuntime.activeAccent)
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -38,7 +40,7 @@ struct RootView: View {
 }
 
 struct DashboardView: View {
-    private let accent = Color(red: 0.35, green: 0.95, blue: 0.55)
+    let accent: Color
 
     var body: some View {
         NavigationStack {
