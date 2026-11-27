@@ -52,12 +52,16 @@ final class URXExtensionRuntime: ObservableObject {
     @Published private(set) var enabledIDs: Set<String> = []
     @Published private(set) var shellGeneration = 0
     @Published var statusMessage: String?
+    @Published private(set) var eventLog: [String] = []
 
     private let fileManager = FileManager.default
     private let enabledKey = "URXExtensionRuntime.enabledIDs"
+    private let eventLogKey = "URXExtensionRuntime.eventLog"
 
     init() {
         loadExtensions()
+        eventLog = UserDefaults.standard.stringArray(forKey: eventLogKey) ?? []
+        recordEvent("URX Core runtime initialized")
     }
 
     var activeAccent: Color {
@@ -84,11 +88,13 @@ final class URXExtensionRuntime: ObservableObject {
         }
         persistEnabledIDs()
         statusMessage = enabled ? "\(manifest.name) enabled for the URX shell." : "\(manifest.name) disabled."
+        recordEvent(statusMessage ?? "Extension state changed")
     }
 
     func respring() {
         shellGeneration += 1
         statusMessage = "URX shell restarted. Host iOS was not affected."
+        recordEvent("URX shell respring • generation \(shellGeneration)")
     }
 
     func importExtension(from url: URL) throws {
@@ -114,6 +120,7 @@ final class URXExtensionRuntime: ObservableObject {
         extensions.append(manifest)
         extensions.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         statusMessage = "Imported \(manifest.name). Review it and enable it when ready."
+        recordEvent("Imported extension: \(manifest.name) v\(manifest.version)")
     }
 
     private func extensionsDirectory() throws -> URL {
@@ -150,6 +157,20 @@ final class URXExtensionRuntime: ObservableObject {
         extensions = loaded.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         enabledIDs = Set(UserDefaults.standard.stringArray(forKey: enabledKey) ?? [])
             .intersection(Set(extensions.map(\.id)))
+    }
+
+    func clearEventLog() {
+        eventLog = []
+        UserDefaults.standard.removeObject(forKey: eventLogKey)
+        recordEvent("Diagnostics log cleared")
+    }
+
+    private func recordEvent(_ message: String) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        eventLog.insert("\(formatter.string(from: Date()))  \(message)", at: 0)
+        if eventLog.count > 50 { eventLog = Array(eventLog.prefix(50)) }
+        UserDefaults.standard.set(eventLog, forKey: eventLogKey)
     }
 
     private func persistEnabledIDs() {
