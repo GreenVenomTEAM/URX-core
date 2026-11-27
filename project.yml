@@ -46,6 +46,9 @@ packages:
   Onboarding:
     url: https://github.com/elihwyma/Onboarding
     from: 1.0.2
+  SWCompression:
+    url: https://github.com/tsolomko/SWCompression.git
+    exactVersion: 4.8.6
 targets:
   URXCore:
     type: application
@@ -107,6 +110,8 @@ targets:
         product: ZippyJSON
       - package: Onboarding
         product: Onboarding
+      - package: SWCompression
+        product: SWCompression
     settings:
       base:
         PRODUCT_MODULE_NAME: Sileo
@@ -126,9 +131,4 @@ targets:
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/CContrib"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/ControlFileParser"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/libzstd"
-          - "$(SRCROOT)/Vendor/SileoIntegration/Headers/liblzma"
-        LIBRARY_SEARCH_PATHS:
-          - "$(inherited)"
-          - "$(SRCROOT)/Vendor/SileoIntegration/Headers/liblzma"
-        OTHER_LDFLAGS: "$(inherited) -llzma.5"
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
