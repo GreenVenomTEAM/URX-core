@@ -90,11 +90,11 @@ final class URXSandboxRuntime: ObservableObject {
         }
         do {
             let records = try URXDPKGStatusStore.load(from: dpkgStatusURL)
-            installedPackageCount = records.filter(\\.isInstalled).count
+            installedPackageCount = records.filter(\.isInstalled).count
             packageDatabaseReady = true
         } catch {
             packageDatabaseReady = false
-            statusMessage = "The local package status database could not be read: \\(error.localizedDescription)"
+            statusMessage = "The local package status database could not be read: \(error.localizedDescription)"
         }
     }
 
@@ -102,7 +102,7 @@ final class URXSandboxRuntime: ObservableObject {
     func savePackageStatus(_ records: [URXDPKGStatusRecord]) throws {
         guard let dpkgStatusURL else { throw SandboxError.storageUnavailable }
         try URXDPKGStatusStore.save(records, to: dpkgStatusURL)
-        installedPackageCount = records.filter(\\.isInstalled).count
+        installedPackageCount = records.filter(\.isInstalled).count
         packageDatabaseReady = true
     }
 
