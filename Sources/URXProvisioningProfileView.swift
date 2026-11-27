@@ -178,10 +178,11 @@ struct URXProvisioningProfileView: View {
 
     private func inspect(_ data: Data, persist: Bool) throws {
         var decoderError: NSError?
-        guard let decoded = URXDecodeProvisioningProfile(data as NSData, &decoderError),
+        guard let decoded = URXDecodeProvisioningProfile(data, &decoderError),
               let content = decoded["content"] as? Data,
               (decoded["signatureVerified"] as? Bool) == true else {
-            throw decoderError ?? URXProvisioningProfileError.signatureRejected
+            if let decoderError { throw decoderError }
+            throw URXProvisioningProfileError.signatureRejected
         }
 
         let propertyList = try PropertyListSerialization.propertyList(from: content, options: [], format: nil)
