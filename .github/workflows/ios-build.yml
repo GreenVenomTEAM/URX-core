@@ -29,7 +29,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/URXCore-DerivedData"
           python3 Scripts/patch-alderis-ios18.py \
             "$RUNNER_TEMP/URXCore-DerivedData/SourcePackages/checkouts/Alderis/Alderis/ColorPickerInnerViewController.swift"
-          python3 Scripts/patch-sileo-dpkgversion.py \\
+          python3 Scripts/patch-sileo-dpkgversion.py \
             "Vendor/Sileo/Sileo/Backend/C Contrib/dpkgversion.h"
 
       - name: Build for iOS Simulator
