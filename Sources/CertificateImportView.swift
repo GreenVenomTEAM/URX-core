@@ -344,7 +344,7 @@ struct CertificateImportView: View {
 }
 
 
-private enum URXCertificateVault {
+enum URXCertificateVault {
     private static let service = "team.greenvn.urx.signing-identity"
     private static let account = "pkcs12-container"
 
