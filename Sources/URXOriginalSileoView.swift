@@ -5,7 +5,7 @@ import UIKit
 /// Sileo sources are compiled directly into the app target; no second app is launched.
 struct URXOriginalSileoView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
-        let storyboard = UIStoryboard(name: "Main", bundle: .main)
+        let storyboard = UIStoryboard(name: "URXSileo", bundle: .main)
         guard let rootController = storyboard.instantiateInitialViewController() else {
             return SileoUnavailableViewController()
         }
