@@ -321,6 +321,24 @@ private struct URXAPTDetailsView: View {
                     }
                 }
             }
+            if !package.provides.isEmpty {
+                Section("VIRTUAL PACKAGES PROVIDED") {
+                    ForEach(Array(package.provides.enumerated()), id: \.offset) { _, provided in
+                        Text(provided.display)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            ForEach(["recommends", "suggests", "conflicts", "breaks", "replaces", "enhances"], id: \.self) { field in
+                if let value = package.fields[field], !value.isEmpty {
+                    Section(field.uppercased()) {
+                        Text(value)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+            }
             Section {
                 Label("Metadata only. No package files are downloaded, extracted, or installed.", systemImage: "lock.shield.fill")
                     .font(.caption)
