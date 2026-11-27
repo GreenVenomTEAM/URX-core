@@ -83,7 +83,7 @@ struct CertificateImportView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(.green)
-                            .disabled(isChecking || password.isEmpty)
+                            .disabled(isChecking)
                         }
                         .padding(18)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -213,11 +213,6 @@ struct CertificateImportView: View {
 
     private func inspectIdentity() {
         guard let url = selectedFile else { return }
-        guard !password.isEmpty else {
-            status = "Enter the password for this file."
-            isSuccess = false
-            return
-        }
 
         isChecking = true
         defer { isChecking = false }
@@ -247,6 +242,19 @@ struct CertificateImportView: View {
             if let readError { throw readError }
             guard let data = coordinatedData, !data.isEmpty else {
                 status = "The selected file is empty or could not be read."
+                isSuccess = false
+                return
+            }
+
+            var passwordVerificationError: NSError?
+            let passwordVerification = URXVerifyPKCS12Password(data, password, &passwordVerificationError)
+            guard passwordVerification != 0 else {
+                status = passwordVerificationError?.localizedDescription ?? "The PKCS#12 container could not be verified."
+                isSuccess = false
+                return
+            }
+            if passwordVerification == 3 {
+                status = passwordVerificationError?.localizedDescription ?? "The PKCS#12 password was rejected."
                 isSuccess = false
                 return
             }
@@ -313,20 +321,33 @@ struct CertificateImportView: View {
             importedItems = nil
 
             do {
-                let profile = try URXEmbeddedSigningProfile.validate(
-                    certificateDER: certificateDER,
-                    bundleIdentifier: Bundle.main.bundleIdentifier ?? ""
-                )
-                try URXCertificateVault.save(pkcs12Data: identityData, password: password, subject: subject)
+                let profile: URXEmbeddedSigningProfileSummary
+                do {
+                    profile = try URXEmbeddedSigningProfile.validate(
+                        certificateDER: certificateDER,
+                        bundleIdentifier: Bundle.main.bundleIdentifier ?? ""
+                    )
+                } catch {
+                    status = "The PKCS#12 identity was read, but it does not match URX's embedded provisioning profile: \(error.localizedDescription)"
+                    isSuccess = false
+                    return
+                }
+
+                do {
+                    try URXCertificateVault.save(pkcs12Data: identityData, password: password, subject: subject)
+                } catch {
+                    status = "The identity and profile match, but Keychain storage failed: \(error.localizedDescription)"
+                    isSuccess = false
+                    return
+                }
                 hasStoredIdentity = true
                 password = ""
-                status = "Identity verified against URX's embedded profile (\(profile.name), Team \(profile.teamIdentifier)) and securely saved in Keychain."
+                let passwordNote = passwordVerification == 2
+                    ? " The container has no PKCS#12 MAC, so its password could not be independently verified."
+                    : " The PKCS#12 password MAC was verified."
+                status = "Identity verified against URX's embedded profile (\(profile.name), Team \(profile.teamIdentifier)) and securely saved in Keychain.\(passwordNote)"
                 if let subject { status += " Certificate: \(subject)" }
                 isSuccess = true
-            } catch {
-                status = "Identity is valid, but Keychain storage failed: \(error.localizedDescription)"
-                isSuccess = false
-            }
         } catch {
             status = "Could not read selected file: \(error.localizedDescription)"
             isSuccess = false
