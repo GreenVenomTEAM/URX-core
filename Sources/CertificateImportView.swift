@@ -270,14 +270,14 @@ struct CertificateImportView: View {
                         importStatus = errSecSuccess
                     } else {
                         importedItems = nil
-                        status = "The compatibility parser read the identity, but Apple Security still rejected the normalized container (status: \\(normalizedStatus))."
+                        status = "The compatibility parser read the identity, but Apple Security still rejected the normalized container (status: \(normalizedStatus))."
                         isSuccess = false
                         return
                     }
                 } else {
                     importedItems = nil
                     let detail = compatibilityError?.localizedDescription ?? "No parser details were returned."
-                    status = "Apple Security could not decode this PKCS#12 file, and the compatibility parser could not normalize it: \\(detail)"
+                    status = "Apple Security could not decode this PKCS#12 file, and the compatibility parser could not normalize it: \(detail)"
                     isSuccess = false
                     return
                 }
@@ -403,7 +403,7 @@ private enum URXCertificateVault {
         case keychain(OSStatus)
         var errorDescription: String? {
             switch self {
-            case .keychain(let status): return "iOS Keychain error (\\(status))."
+            case .keychain(let status): return "iOS Keychain error (\(status))."
             }
         }
     }
