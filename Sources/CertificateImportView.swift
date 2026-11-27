@@ -251,15 +251,42 @@ struct CertificateImportView: View {
                 return
             }
 
-            let looksLikeASN1Sequence = data.first == 0x30
             var importedItems: CFArray?
             let options = [kSecImportExportPassphrase as String: password] as CFDictionary
-            let code = SecPKCS12Import(data as CFData, options, &importedItems)
+            var identityData = data
+            var importStatus = SecPKCS12Import(data as CFData, options, &importedItems)
 
-            guard code == errSecSuccess,
+            // SideStore may export PKCS#12 encryption profiles that Apple's
+            // importer rejects. Normalize only after the native importer
+            // specifically reports a decode error, then verify again with Apple.
+            if importStatus == errSecDecode {
+                var compatibilityError: NSError?
+                if let normalized = URXNormalizePKCS12(data as NSData, password as NSString, &compatibilityError) {
+                    var normalizedItems: CFArray?
+                    let normalizedStatus = SecPKCS12Import(normalized as CFData, options, &normalizedItems)
+                    if normalizedStatus == errSecSuccess {
+                        importedItems = normalizedItems
+                        identityData = normalized as Data
+                        importStatus = errSecSuccess
+                    } else {
+                        importedItems = nil
+                        status = "The compatibility parser read the identity, but Apple Security still rejected the normalized container (status: \\(normalizedStatus))."
+                        isSuccess = false
+                        return
+                    }
+                } else {
+                    importedItems = nil
+                    let detail = compatibilityError?.localizedDescription ?? "No parser details were returned."
+                    status = "Apple Security could not decode this PKCS#12 file, and the compatibility parser could not normalize it: \\(detail)"
+                    isSuccess = false
+                    return
+                }
+            }
+
+            guard importStatus == errSecSuccess,
                   let items = importedItems as? [[String: Any]],
                   !items.isEmpty else {
-                status = securityErrorMessage(for: code, byteCount: data.count, looksLikeASN1Sequence: looksLikeASN1Sequence)
+                status = securityErrorMessage(for: importStatus, byteCount: data.count, looksLikeASN1Sequence: data.first == 0x30)
                 isSuccess = false
                 importedItems = nil
                 return
@@ -281,7 +308,7 @@ struct CertificateImportView: View {
             importedItems = nil
 
             do {
-                try URXCertificateVault.save(pkcs12Data: data, password: password, subject: subject)
+                try URXCertificateVault.save(pkcs12Data: identityData, password: password, subject: subject)
                 hasStoredIdentity = true
                 password = ""
                 status = "Signing identity imported and securely saved in the iOS Keychain."
