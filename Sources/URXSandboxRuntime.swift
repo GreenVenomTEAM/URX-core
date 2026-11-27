@@ -16,15 +16,19 @@ struct URXSandboxAppRecord: Codable, Identifiable, Hashable {
 final class URXSandboxRuntime: ObservableObject {
     @Published private(set) var installedApps: [URXSandboxAppRecord] = []
     @Published private(set) var storageReady = false
+    @Published private(set) var packageDatabaseReady = false
+    @Published private(set) var installedPackageCount = 0
     @Published var statusMessage: String?
 
     private let fileManager = FileManager.default
     private var rootURL: URL?
     private var registryURL: URL?
+    private var dpkgStatusURL: URL?
 
     init() {
         prepareStorage()
         loadRegistry()
+        loadPackageDatabase()
     }
 
     var installedCount: Int { installedApps.count }
@@ -62,10 +66,44 @@ final class URXSandboxRuntime: ObservableObject {
             try fileManager.createDirectory(at: shared, withIntermediateDirectories: true)
             rootURL = root
             registryURL = root.appendingPathComponent("registry.json")
+            let dpkgDirectory = root
+                .appendingPathComponent("var", isDirectory: true)
+                .appendingPathComponent("lib", isDirectory: true)
+                .appendingPathComponent("dpkg", isDirectory: true)
+            try fileManager.createDirectory(at: dpkgDirectory, withIntermediateDirectories: true)
+            dpkgStatusURL = dpkgDirectory.appendingPathComponent("status")
+            if let dpkgStatusURL, !fileManager.fileExists(atPath: dpkgStatusURL.path) {
+                try Data().write(to: dpkgStatusURL, options: .atomic)
+            }
             storageReady = true
         } catch {
             statusMessage = "Sandbox storage could not be prepared: \(error.localizedDescription)"
         }
+    }
+
+    /// Loads dpkg's data-only status database from URX's private container.
+    /// This does not run dpkg, package scripts, or native package payloads.
+    private func loadPackageDatabase() {
+        guard let dpkgStatusURL else {
+            packageDatabaseReady = false
+            return
+        }
+        do {
+            let records = try URXDPKGStatusStore.load(from: dpkgStatusURL)
+            installedPackageCount = records.filter(\\.isInstalled).count
+            packageDatabaseReady = true
+        } catch {
+            packageDatabaseReady = false
+            statusMessage = "The local package status database could not be read: \\(error.localizedDescription)"
+        }
+    }
+
+    /// Persists metadata-only installed-state records in the app container.
+    func savePackageStatus(_ records: [URXDPKGStatusRecord]) throws {
+        guard let dpkgStatusURL else { throw SandboxError.storageUnavailable }
+        try URXDPKGStatusStore.save(records, to: dpkgStatusURL)
+        installedPackageCount = records.filter(\\.isInstalled).count
+        packageDatabaseReady = true
     }
 
     private func loadRegistry() {
