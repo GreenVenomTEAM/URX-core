@@ -16,6 +16,47 @@ static NSError *URXPKCS12MakeError(NSInteger code, NSString *message) {
                            userInfo:@{NSLocalizedDescriptionKey: message}];
 }
 
+int URXVerifyPKCS12Password(NSData *input, NSString *password, NSError **error) {
+    if (input.length == 0 || password == nil) {
+        if (error) *error = URXPKCS12MakeError(10, @"The PKCS#12 input is empty or unavailable.");
+        return 0;
+    }
+    ERR_clear_error();
+    const unsigned char *start = (const unsigned char *)input.bytes;
+    const unsigned char *cursor = start;
+    PKCS12 *container = d2i_PKCS12(NULL, &cursor, (long)input.length);
+    if (container == NULL || cursor != start + input.length) {
+        if (container) PKCS12_free(container);
+        if (error) *error = URXPKCS12MakeError(11, @"The file is not a complete DER-encoded PKCS#12 container.");
+        else ERR_clear_error();
+        return 0;
+    }
+    const char *passphrase = password.UTF8String ?: "";
+    const BOOL hasMAC = PKCS12_mac_present(container) == 1;
+    if (hasMAC && PKCS12_verify_mac(container, passphrase, -1) != 1) {
+        PKCS12_free(container);
+        if (error) *error = URXPKCS12MakeError(12, @"The PKCS#12 password did not match its integrity MAC.");
+        else ERR_clear_error();
+        return 3;
+    }
+    EVP_PKEY *privateKey = NULL;
+    X509 *certificate = NULL;
+    STACK_OF(X509) *chain = NULL;
+    const int parsed = PKCS12_parse(container, passphrase, &privateKey, &certificate, &chain);
+    const BOOL hasIdentity = parsed == 1 && privateKey != NULL && certificate != NULL;
+    if (privateKey) EVP_PKEY_free(privateKey);
+    if (certificate) X509_free(certificate);
+    if (chain) sk_X509_pop_free(chain, X509_free);
+    PKCS12_free(container);
+    if (!hasIdentity) {
+        if (error) *error = URXPKCS12MakeError(13, hasMAC ? @"The password MAC matched, but OpenSSL could not extract the signing identity." : @"OpenSSL could not extract the identity. The password may be incorrect or the container may be damaged.");
+        else ERR_clear_error();
+        return hasMAC ? 0 : 3;
+    }
+    ERR_clear_error();
+    return hasMAC ? 1 : 2;
+}
+
 NSData * _Nullable URXNormalizePKCS12(NSData *input,
                                       NSString *password,
                                       NSError * _Nullable * _Nullable error) {
