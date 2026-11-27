@@ -146,16 +146,20 @@ enum URXPackageIndexParser {
                 let name = nameToken.components(separatedBy: ":").first ?? nameToken
                 let constraint = value[value.index(after: open)..<close]
                     .trimmingCharacters(in: .whitespaces)
-                let parts = constraint.split(whereSeparator: { $0.isWhitespace })
-                guard isValidPackageName(name), parts.count == 2 else {
+                let relations = [">>", ">=", "<=", "<<", "="]
+                guard isValidPackageName(name),
+                      let relation = relations.first(where: { constraint.hasPrefix($0) }) else {
                     throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue)
                 }
-                let relation = String(parts[0])
-                guard [">>", ">=", "=", "<=", "<<"].contains(relation),
-                      !parts[1].isEmpty else {
+                // Debian indexes in the wild sometimes omit the optional-looking
+                // whitespace between the relation operator and version, e.g. >=12.2.
+                let requiredVersion = constraint.dropFirst(relation.count)
+                    .trimmingCharacters(in: .whitespaces)
+                guard !requiredVersion.isEmpty,
+                      !requiredVersion.contains(where: { $0.isWhitespace }) else {
                     throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue)
                 }
-                return URXPackageDependency(package: name, relation: relation, version: String(parts[1]))
+                return URXPackageDependency(package: name, relation: relation, version: requiredVersion)
             }
         }
     }
