@@ -16,15 +16,56 @@ packages:
   OpenSSL-Package:
     url: https://github.com/krzyzanowskim/OpenSSL-Package.git
     from: 3.6.5000
+  Cosmos:
+    url: https://github.com/evgenyneu/Cosmos.git
+    from: 23.0.0
+  SQLite.swift:
+    url: https://github.com/stephencelis/SQLite.swift.git
+    from: 0.12.2
+  SwipeCellKit:
+    url: https://github.com/SwipeCellKit/SwipeCellKit.git
+    from: 2.7.1
+  LNZTreeView:
+    url: https://github.com/elihwyma/LNZTreeView
+    branch: master
+  LNPopupController:
+    url: https://github.com/elihwyma/LNPopupController
+    revision: 6cdb4a977b8e0253305cd5009e33028d90631788
+  Evander:
+    url: https://github.com/elihwyma/Evander
+    revision: 0059e74d91e8574bee454e748ea6cc188e8b43db
+  Down:
+    url: https://github.com/johnxnguyen/Down.git
+    from: 0.11.0
+  Alderis:
+    url: https://github.com/elihwyma/Alderis
+    branch: master
+  ZippyJSON:
+    url: https://github.com/michaeleisel/ZippyJSON.git
+    from: 1.0.0
+  Onboarding:
+    url: https://github.com/elihwyma/Onboarding
+    from: 1.0.2
 targets:
   URXCore:
     type: application
     dependencies:
       - package: OpenSSL-Package
         product: OpenSSL
+      - target: SileoUI
     platform: iOS
     sources:
       - path: Sources
+    resources:
+      - path: Vendor/Sileo/Sileo
+        excludes:
+          - "**/*.swift"
+          - "**/*.h"
+          - "**/*.m"
+          - "**/*.c"
+          - "Info.plist"
+          - "**/*.entitlements"
+          - "Sileo-Bridging-Header.h"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore
@@ -32,3 +73,56 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SWIFT_OBJC_BRIDGING_HEADER: Sources/URXBridging.h
         OTHER_LDFLAGS: "$(inherited) -lz"
+  SileoUI:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Vendor/Sileo/Sileo
+        includes:
+          - "**/*.swift"
+          - "**/*.h"
+          - "**/*.m"
+          - "**/*.c"
+        excludes:
+          - "AppDelegate.swift"
+      - path: Vendor/SileoIntegration
+    dependencies:
+      - package: Cosmos
+        product: Cosmos
+      - package: SQLite.swift
+        product: SQLite
+      - package: SwipeCellKit
+        product: SwipeCellKit
+      - package: LNZTreeView
+        product: LNZTreeView
+      - package: LNPopupController
+        product: LNPopupController-Static
+      - package: Evander
+        product: Evander
+      - package: Down
+        product: Down
+      - package: Alderis
+        product: Alderis
+      - package: ZippyJSON
+        product: ZippyJSON
+      - package: Onboarding
+        product: Onboarding
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: Sileo
+        PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore.sileo
+        DEFINES_MODULE: YES
+        SWIFT_VERSION: "5.9"
+        SWIFT_INSTALL_OBJC_HEADER: NO
+        SWIFT_OBJC_BRIDGING_HEADER: Vendor/Sileo/Sileo/Sileo-Bridging-Header.h
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TARGET_SANDBOX"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "TARGET_SANDBOX=1"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/Contrib"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/UI/WhiteBlur"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/Backend/C Contrib"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/Backend/Control File Parser"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"

@@ -191,8 +191,9 @@ struct URXSandboxView: View {
             .navigationTitle("Sandbox")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showingSileo) {
-                URXAPTView(displayTitle: "Sileo")
+                URXOriginalSileoView()
                     .presentationDragIndicator(.visible)
+                    .ignoresSafeArea()
             }
         }
         .tint(accent)
@@ -302,10 +303,10 @@ struct URXSandboxView: View {
                 .frame(width: 58, height: 58)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Sileo").font(.headline).foregroundStyle(.primary)
-                    Text("Original package manager • first target")
+                    Text("Original Sileo interface • sandbox bridge in progress")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("OPEN PACKAGE CENTER")
+                    Text("OPEN SILEO")
                         .font(.caption2.bold())
                         .tracking(0.7)
                         .foregroundStyle(.orange)
