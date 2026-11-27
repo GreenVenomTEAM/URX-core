@@ -1,6 +1,9 @@
 #import "URXProvisioningProfileDecoder.h"
 #import <Security/Security.h>
-#import <Security/SecCMS.h>
+#import <openssl/cms.h>
+#import <openssl/err.h>
+#import <openssl/x509.h>
+#import <openssl/bio.h>
 
 static NSString * const URXProfileDecoderErrorDomain = @"team.greenvn.urx.provisioning-profile";
 
@@ -16,64 +19,122 @@ NSDictionary *URXDecodeProvisioningProfile(NSData *data, NSError **error) {
         return nil;
     }
 
-    CMSDecoderRef decoder = NULL;
-    OSStatus status = CMSDecoderCreate(&decoder);
-    if (status != errSecSuccess || decoder == NULL) {
-        if (error) *error = URXProfileError(status, [NSString stringWithFormat:@"Could not create CMS decoder (%d).", (int)status]);
+    const unsigned char *cursor = data.bytes;
+    CMS_ContentInfo *cms = d2i_CMS_ContentInfo(NULL, &cursor, (long)data.length);
+    if (cms == NULL || cursor != (const unsigned char *)data.bytes + data.length) {
+        if (cms) CMS_ContentInfo_free(cms);
+        if (error) *error = URXProfileError(2, @"Provisioning profile is not a valid DER-encoded CMS message.");
         return nil;
     }
 
-    status = CMSDecoderUpdateMessage(decoder, data.bytes, data.length);
-    if (status == errSecSuccess) {
-        status = CMSDecoderFinalizeMessage(decoder);
-    }
-    if (status != errSecSuccess) {
-        if (error) *error = URXProfileError(status, [NSString stringWithFormat:@"Provisioning profile CMS data is invalid (%d).", (int)status]);
-        CFRelease(decoder);
+    BIO *contentBIO = BIO_new(BIO_s_mem());
+    if (contentBIO == NULL) {
+        CMS_ContentInfo_free(cms);
+        if (error) *error = URXProfileError(3, @"Could not allocate a CMS content buffer.");
         return nil;
     }
 
-    size_t signerCount = 0;
-    status = CMSDecoderGetNumSigners(decoder, &signerCount);
-    if (status != errSecSuccess || signerCount == 0) {
-        if (error) *error = URXProfileError(status, @"The profile does not contain a CMS signature.");
-        CFRelease(decoder);
+    // Verify the CMS cryptographic signature first. Certificate trust is evaluated
+    // separately with Apple's public Security framework below.
+    int verified = CMS_verify(cms, NULL, NULL, NULL, contentBIO,
+                              CMS_BINARY | CMS_NO_SIGNER_CERT_VERIFY);
+    if (verified != 1) {
+        unsigned long opensslError = ERR_get_error();
+        char errorBuffer[256] = {0};
+        if (opensslError) ERR_error_string_n(opensslError, errorBuffer, sizeof(errorBuffer));
+        NSString *detail = opensslError
+            ? [NSString stringWithUTF8String:errorBuffer]
+            : @"CMS signature verification failed.";
+        if (error) *error = URXProfileError(4, [NSString stringWithFormat:@"Provisioning profile signature is invalid: %@.", detail]);
+        BIO_free(contentBIO);
+        CMS_ContentInfo_free(cms);
         return nil;
     }
 
-    SecPolicyRef policy = SecPolicyCreateBasicX509();
-    CMSSignerStatus signerStatus = kCMSSignerUnsigned;
-    SecTrustRef trust = NULL;
-    OSStatus certificateStatus = errSecSuccess;
-    status = CMSDecoderCopySignerStatus(decoder, 0, policy, true, &signerStatus, &trust, &certificateStatus);
-
-    if (trust) CFRelease(trust);
-    if (policy) CFRelease(policy);
-
-    if (status != errSecSuccess || signerStatus != kCMSSignerValid) {
-        NSString *message = [NSString stringWithFormat:
-            @"The provisioning profile signature or signer trust could not be verified (CMS: %d, signer: %u, certificate: %d).",
-            (int)status, (unsigned int)signerStatus, (int)certificateStatus];
-        if (error) *error = URXProfileError(status != errSecSuccess ? status : certificateStatus, message);
-        CFRelease(decoder);
+    STACK_OF(X509) *signers = CMS_get0_signers(cms);
+    STACK_OF(X509) *embeddedCertificates = CMS_get1_certs(cms);
+    if (signers == NULL || sk_X509_num(signers) < 1) {
+        if (signers) sk_X509_free(signers);
+        if (embeddedCertificates) sk_X509_pop_free(embeddedCertificates, X509_free);
+        BIO_free(contentBIO);
+        CMS_ContentInfo_free(cms);
+        if (error) *error = URXProfileError(5, @"The profile does not contain a CMS signer certificate.");
         return nil;
     }
 
-    CFDataRef content = NULL;
-    status = CMSDecoderCopyContent(decoder, &content);
-    CFRelease(decoder);
+    NSMutableArray *trustCertificates = [NSMutableArray array];
+    X509 *signer = sk_X509_value(signers, 0);
+    int certificateCount = embeddedCertificates ? sk_X509_num(embeddedCertificates) : 0;
+    BOOL signerAdded = NO;
 
-    if (status != errSecSuccess || content == NULL) {
-        if (error) *error = URXProfileError(status, @"The signed profile did not contain an embedded property list.");
-        if (content) CFRelease(content);
+    for (int index = 0; index < certificateCount; index++) {
+        X509 *certificate = sk_X509_value(embeddedCertificates, index);
+        int derLength = i2d_X509(certificate, NULL);
+        if (derLength <= 0) continue;
+        NSMutableData *der = [NSMutableData dataWithLength:(NSUInteger)derLength];
+        unsigned char *derCursor = der.mutableBytes;
+        if (i2d_X509(certificate, &derCursor) != derLength) continue;
+        SecCertificateRef secCertificate = SecCertificateCreateWithData(kCFAllocatorDefault, (__bridge CFDataRef)der);
+        if (secCertificate) {
+            [trustCertificates addObject:(__bridge id)secCertificate];
+            if (X509_cmp(certificate, signer) == 0) signerAdded = YES;
+            CFRelease(secCertificate);
+        }
+    }
+
+    if (!signerAdded) {
+        int derLength = i2d_X509(signer, NULL);
+        if (derLength > 0) {
+            NSMutableData *der = [NSMutableData dataWithLength:(NSUInteger)derLength];
+            unsigned char *derCursor = der.mutableBytes;
+            if (i2d_X509(signer, &derCursor) == derLength) {
+                SecCertificateRef secCertificate = SecCertificateCreateWithData(kCFAllocatorDefault, (__bridge CFDataRef)der);
+                if (secCertificate) {
+                    [trustCertificates insertObject:(__bridge id)secCertificate atIndex:0];
+                    CFRelease(secCertificate);
+                }
+            }
+        }
+    }
+
+    BOOL trusted = NO;
+    if (trustCertificates.count > 0) {
+        SecPolicyRef policy = SecPolicyCreateBasicX509();
+        SecTrustRef trust = NULL;
+        OSStatus trustStatus = SecTrustCreateWithCertificates((__bridge CFArrayRef)trustCertificates, policy, &trust);
+        if (trustStatus == errSecSuccess && trust != NULL) {
+            trusted = SecTrustEvaluateWithError(trust, NULL);
+            CFRelease(trust);
+        }
+        if (policy) CFRelease(policy);
+    }
+
+    sk_X509_free(signers);
+    if (embeddedCertificates) sk_X509_pop_free(embeddedCertificates, X509_free);
+
+    if (!trusted) {
+        BIO_free(contentBIO);
+        CMS_ContentInfo_free(cms);
+        if (error) *error = URXProfileError(6, @"The CMS signature is valid, but its signer certificate chain could not be trusted by iOS.");
         return nil;
     }
 
-    NSData *payload = [NSData dataWithData:(__bridge NSData *)content];
-    CFRelease(content);
+    char *contentBytes = NULL;
+    long contentLength = BIO_get_mem_data(contentBIO, &contentBytes);
+    if (contentLength <= 0 || contentBytes == NULL) {
+        BIO_free(contentBIO);
+        CMS_ContentInfo_free(cms);
+        if (error) *error = URXProfileError(7, @"The signed profile did not contain an embedded property list.");
+        return nil;
+    }
+
+    NSData *payload = [NSData dataWithBytes:contentBytes length:(NSUInteger)contentLength];
+    BIO_free(contentBIO);
+    CMS_ContentInfo_free(cms);
+
     return @{
         @"content": payload,
         @"signatureVerified": @YES,
-        @"signerCount": @(signerCount)
+        @"signerCount": @1
     };
 }
