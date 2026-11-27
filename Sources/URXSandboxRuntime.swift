@@ -150,7 +150,8 @@ struct URXSandboxView: View {
                     header
 
                     HStack(spacing: 12) {
-                        metric("INSTALLED", value: "\(runtime.installedCount)", symbol: "square.stack.3d.up.fill")
+                        metric("APPS", value: "\(runtime.installedCount)", symbol: "square.stack.3d.up.fill")
+                        metric("DPKG", value: runtime.packageDatabaseReady ? "\(runtime.installedPackageCount)" : "ERROR", symbol: "shippingbox.fill")
                         metric("STORAGE", value: runtime.storageReady ? "READY" : "ERROR", symbol: "externaldrive.fill")
                     }
 
