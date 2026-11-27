@@ -13,10 +13,9 @@ if not path.is_file():
 
 source = path.read_text()
 old = 'if (!(isdigit(character) || isalpha(character) || strrchr(".-+~:", character))) {'
-new = 'if (!(isdigit(character) || isalpha(character) || character == \' .\'[1] || character == \'-\' || character == \'+\' || character == \'~\' || character == \':\')) {'
-# Keep the check explicit: the original strrchr call can be optimized by Clang
-# into memrchr, which is not provided by the iOS SDK's libc.
 new = 'if (!(isdigit(character) || isalpha(character) || character == \'.\' || character == \'-\' || character == \'+\' || character == \'~\' || character == \':\')) {'
+# The explicit comparisons prevent Clang from lowering this tiny lookup to
+# memrchr, which is not provided by the iOS SDK's libc.
 if new in source:
     print("Sileo dpkgversion.c portability patch already applied.")
     raise SystemExit(0)
