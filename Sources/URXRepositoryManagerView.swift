@@ -4,6 +4,7 @@ import Foundation
 private struct URXRepository: Codable, Identifiable, Hashable {
     var id: UUID
     var name: String
+    // Kept as indexURL for backward-compatible decoding of sources added by the first prototype.
     var indexURL: String
     var lastUpdated: String?
 
@@ -21,13 +22,14 @@ struct URXRepositoryManagerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var repositories: [URXRepository] = []
     @State private var repositoryName = ""
-    @State private var indexURL = ""
+    @State private var repositoryURL = ""
     @State private var isLoading = false
     @State private var loadingID: UUID?
     @State private var statusMessage: String?
     @State private var errorMessage: String?
 
     private let maximumIndexSize = 20 * 1024 * 1024
+    private let maximumExpandedSize = 32 * 1024 * 1024
 
     var body: some View {
         NavigationStack {
@@ -35,17 +37,17 @@ struct URXRepositoryManagerView: View {
                 Section("ADD APT SOURCE") {
                     TextField("Repository name", text: $repositoryName)
                         .textInputAutocapitalization(.words)
-                    TextField("HTTPS URL to Packages index", text: $indexURL)
+                    TextField("Repository URL (e.g. https://repo.example/)", text: $repositoryURL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Text("For this stage, enter the direct URL of a Debian Packages index file.")
+                    Text("Enter the repository's root address, as you would in Sileo. URX Core will look for its package indexes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Button(action: addRepository) {
                         Label("Add source", systemImage: "plus.circle.fill")
                     }
-                    .disabled(repositoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || indexURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(repositoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || repositoryURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
                 Section("SOURCES") {
@@ -96,7 +98,7 @@ struct URXRepositoryManagerView: View {
                 }
 
                 Section {
-                    Label("Only the Packages index is downloaded and parsed. Package archives, maintainer scripts, and executable code are not downloaded or run.", systemImage: "lock.shield.fill")
+                    Label("URX Core fetches repository metadata only. It does not download package archives or execute package scripts.", systemImage: "lock.shield.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -161,31 +163,37 @@ struct URXRepositoryManagerView: View {
 
     private func addRepository() {
         let name = repositoryName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let address = indexURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let components = URLComponents(string: address),
-              components.scheme?.lowercased() == "https",
+        let address = repositoryURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: address),
+              let scheme = components.scheme?.lowercased(),
+              ["https", "http"].contains(scheme),
               let host = components.host, !host.isEmpty,
               components.user == nil, components.password == nil,
-              let url = components.url else {
-            errorMessage = "Enter a valid HTTPS URL without embedded credentials."
+              components.query == nil, components.fragment == nil else {
+            errorMessage = "Enter a valid HTTP or HTTPS repository URL without credentials, query parameters, or fragments."
+            return
+        }
+        if !components.path.hasSuffix("/") { components.path += "/" }
+        guard let url = components.url else {
+            errorMessage = "The repository URL is invalid."
             return
         }
         guard !repositories.contains(where: { $0.indexURL == url.absoluteString }) else {
-            errorMessage = "This Packages index URL is already added."
+            errorMessage = "This repository is already added."
             return
         }
         repositories.append(URXRepository(name: name, indexURL: url.absoluteString))
         repositoryName = ""
-        indexURL = ""
+        repositoryURL = ""
         saveRepositories()
-        statusMessage = "Source added. Tap the refresh icon to load its index."
+        statusMessage = "Repository added. Tap refresh to discover its package index."
     }
 
     @MainActor
     private func refresh(_ repository: URXRepository) async {
-        guard let url = URL(string: repository.indexURL),
-              url.scheme?.lowercased() == "https" else {
-            errorMessage = "This source does not contain a valid HTTPS URL."
+        guard let baseURL = URL(string: repository.indexURL),
+              ["https", "http"].contains(baseURL.scheme?.lowercased() ?? "") else {
+            errorMessage = "This repository URL is invalid."
             return
         }
         isLoading = true
@@ -194,26 +202,10 @@ struct URXRepositoryManagerView: View {
             isLoading = false
             loadingID = nil
         }
-        do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 30
-            request.setValue("URX-Core-APT/0.1", forHTTPHeaderField: "User-Agent")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                throw RepositoryError.httpStatus(code)
-            }
-            guard !data.isEmpty, data.count <= maximumIndexSize else {
-                throw RepositoryError.invalidSize
-            }
-            guard let source = String(data: data, encoding: .utf8) else {
-                throw RepositoryError.invalidEncoding
-            }
-            let parsed = try URXPackageIndexParser.parse(source)
-            guard !parsed.isEmpty else { throw RepositoryError.emptyIndex }
 
-            try data.write(to: cacheURL(for: repository), options: .atomic)
+        do {
+            let discovered = try await discoverPackages(baseURL: baseURL)
+            try discovered.data.write(to: cacheURL(for: repository), options: .atomic)
             if let position = repositories.firstIndex(where: { $0.id == repository.id }) {
                 repositories[position].lastUpdated = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
             }
@@ -227,10 +219,126 @@ struct URXRepositoryManagerView: View {
                 allPackages.append(contentsOf: try URXPackageIndexParser.parse(cachedSource))
             }
             onPackagesLoaded(uniquePackages(allPackages))
-            statusMessage = "Loaded \(parsed.count) packages from \(repository.name)."
+            statusMessage = "Found \(discovered.count) packages at \(discovered.location)."
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func discoverPackages(baseURL: URL) async throws -> (data: Data, count: Int, location: String) {
+        // Flat repositories are common in jailbreak package hosting.
+        let flatNames = ["Packages.gz", "Packages"]
+        for name in flatNames {
+            let candidate = baseURL.appendingPathComponent(name)
+            if let result = try? await fetchIndex(candidate) {
+                return result
+            }
+        }
+
+        // Also accept a URL that already points directly to a Packages index (legacy prototype).
+        if baseURL.lastPathComponent.lowercased().hasPrefix("packages") {
+            if let result = try? await fetchIndex(baseURL) { return result }
+        }
+
+        // Conventional APT distributions: inspect Release metadata, then locate the
+        // architecture-specific component indexes it advertises.
+        let suites = ["stable", "ios", "unstable"]
+        var attempted = [String]()
+        for suite in suites {
+            let releaseURL = baseURL.appendingPathComponent("dists").appendingPathComponent(suite).appendingPathComponent("Release")
+            guard let releaseData = try? await fetchSmallText(releaseURL),
+                  let releaseText = String(data: releaseData, encoding: .utf8) else { continue }
+            let fields = parseReleaseFields(releaseText)
+            let components = (fields["components"] ?? "main").split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            let advertised = (fields["architectures"] ?? "").split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            let architectures = uniqueStrings(advertised + ["iphoneos-arm64", "iphoneos-arm64e", "all"])
+            for component in components {
+                for architecture in architectures {
+                    for filename in ["Packages.gz", "Packages"] {
+                        let candidate = baseURL
+                            .appendingPathComponent("dists")
+                            .appendingPathComponent(suite)
+                            .appendingPathComponent(component)
+                            .appendingPathComponent("binary-\(architecture)")
+                            .appendingPathComponent(filename)
+                        attempted.append(candidate.path)
+                        if let result = try? await fetchIndex(candidate) { return result }
+                    }
+                }
+            }
+        }
+        throw RepositoryError.indexNotFound(attempted.count)
+    }
+
+    private func fetchSmallText(_ url: URL) async throws -> Data {
+        let (data, response) = try await performRequest(url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw RepositoryError.notFound
+        }
+        guard !data.isEmpty, data.count <= 1024 * 1024 else { throw RepositoryError.invalidSize }
+        return data
+    }
+
+    private func fetchIndex(_ url: URL) async throws -> (data: Data, count: Int, location: String) {
+        let (downloaded, response) = try await performRequest(url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw RepositoryError.notFound
+        }
+        guard !downloaded.isEmpty, downloaded.count <= maximumIndexSize else {
+            throw RepositoryError.invalidSize
+        }
+        let data: Data
+        if url.pathExtension.lowercased() == "gz" {
+            data = try decompressGzip(downloaded)
+        } else {
+            data = downloaded
+        }
+        guard data.count <= maximumExpandedSize,
+              let source = String(data: data, encoding: .utf8) else {
+            throw RepositoryError.invalidEncoding
+        }
+        let records = try URXPackageIndexParser.parse(source)
+        guard !records.isEmpty else { throw RepositoryError.emptyIndex }
+        return (data, records.count, url.path)
+    }
+
+    private func performRequest(_ url: URL) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        request.setValue("URX-Core-APT/0.2", forHTTPHeaderField: "User-Agent")
+        return try await URLSession.shared.data(for: request)
+    }
+
+    private func decompressGzip(_ data: Data) throws -> Data {
+        var output: UnsafeMutablePointer<UInt8>?
+        var outputLength = 0
+        let result = data.withUnsafeBytes { bytes -> Int32 in
+            guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return -2 }
+            return urx_gzip_decompress(base, data.count, &output, &outputLength)
+        }
+        guard result == 0, let output else { throw RepositoryError.decompressionFailed }
+        defer { free(output) }
+        return Data(bytes: output, count: outputLength)
+    }
+
+    private func parseReleaseFields(_ text: String) -> [String: String] {
+        var fields: [String: String] = [:]
+        var currentKey: String?
+        for line in text.components(separatedBy: .newlines) {
+            if line.hasPrefix(" "), let key = currentKey {
+                fields[key, default: ""] += " " + line.trimmingCharacters(in: .whitespaces)
+            } else if let colon = line.firstIndex(of: ":") {
+                let key = line[..<colon].lowercased()
+                fields[key] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                currentKey = key
+            }
+        }
+        return fields
+    }
+
+    private func uniqueStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
     }
 
     private func uniquePackages(_ input: [URXPackageRecord]) -> [URXPackageRecord] {
@@ -275,17 +383,21 @@ struct URXRepositoryManagerView: View {
     }
 
     private enum RepositoryError: LocalizedError {
-        case httpStatus(Int)
+        case notFound
         case invalidSize
         case invalidEncoding
         case emptyIndex
+        case decompressionFailed
+        case indexNotFound(Int)
 
         var errorDescription: String? {
             switch self {
-            case .httpStatus(let code): return "The server returned HTTP status \(code)."
-            case .invalidSize: return "The Packages index is empty or exceeds 20 MB."
-            case .invalidEncoding: return "The Packages index is not valid UTF-8 text."
-            case .emptyIndex: return "The downloaded file contains no package records."
+            case .notFound: return "This index path does not exist."
+            case .invalidSize: return "A repository metadata file is empty or exceeds its size limit."
+            case .invalidEncoding: return "The downloaded Packages index is not valid UTF-8 or exceeds the expanded size limit."
+            case .emptyIndex: return "The discovered file contains no package records."
+            case .decompressionFailed: return "The repository's gzip Packages index could not be decompressed."
+            case .indexNotFound(let count): return "No supported Packages index was found. Checked flat repository indexes and \(count) standard APT index paths. This repository may use a different suite, component, architecture, or compression format."
             }
         }
     }
