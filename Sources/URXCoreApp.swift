@@ -468,6 +468,8 @@ struct PackageView: View {
     @State private var parseError: String?
     @State private var showingPackageImporter = false
     @State private var importedFilename: String?
+    @State private var dataFileEntries: [String] = []
+    @State private var dataArchiveMessage: String?
 
     private let sample = """
     Package: example-tool
@@ -630,6 +632,32 @@ struct PackageView: View {
                         .background(Color(uiColor: .secondarySystemBackground).opacity(0.55), in: RoundedRectangle(cornerRadius: 20))
                     }
 
+                    if let dataArchiveMessage {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("PACKAGE CONTENTS")
+                                .font(.caption.weight(.bold))
+                                .tracking(1)
+                                .foregroundStyle(.secondary)
+                            Text(dataArchiveMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            if !dataFileEntries.isEmpty {
+                                Text("\(dataFileEntries.count) entries")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.green)
+                                ForEach(dataFileEntries, id: \.self) { path in
+                                    Text(path)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(uiColor: .secondarySystemBackground).opacity(0.55), in: RoundedRectangle(cornerRadius: 20))
+                    }
+
                     Label("Read-only inspection. No package installation, scripts, or system modifications.", systemImage: "lock.shield.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -694,6 +722,13 @@ struct PackageView: View {
             metadata = parsed
             importedFilename = url.lastPathComponent
             parseError = nil
+            do {
+                dataFileEntries = try DebianDataArchiveInspector.fileEntries(from: data)
+                dataArchiveMessage = "File paths only. Nothing is extracted, installed, or executed."
+            } catch {
+                dataFileEntries = []
+                dataArchiveMessage = error.localizedDescription
+            }
         } catch {
             metadata = nil
             parseError = error.localizedDescription
