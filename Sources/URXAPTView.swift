@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct URXAPTView: View {
     @State private var packages: [URXPackageRecord] = []
+    @State private var installedPackageIDs: Set<String> = []
     @State private var searchText = ""
     @State private var showingImporter = false
     @State private var showingRepositories = false
@@ -55,7 +56,7 @@ struct URXAPTView: View {
                         Section("CATALOG") {
                             ForEach(filteredPackages) { package in
                                 NavigationLink {
-                                    URXAPTDetailsView(package: package)
+                                    URXAPTDetailsView(package: package, isInstalled: installedPackageIDs.contains(package.id))
                                 } label: {
                                     VStack(alignment: .leading, spacing: 4) {
                                         HStack(alignment: .firstTextBaseline) {
@@ -77,6 +78,10 @@ struct URXAPTView: View {
                                             Text(package.architecture)
                                             if let size = package.size {
                                                 Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
+                                            }
+                                            if installedPackageIDs.contains(package.id) {
+                                                Label("INSTALLED", systemImage: "checkmark.circle.fill")
+                                                    .foregroundStyle(.green)
                                             }
                                         }
                                         .font(.caption2)
@@ -156,7 +161,10 @@ struct URXAPTView: View {
                         .background(.ultraThinMaterial)
                 }
             }
-            .onAppear(perform: loadSavedIndex)
+            .onAppear {
+                loadSavedIndex()
+                loadInstalledStatus()
+            }
         }
     }
 
@@ -213,6 +221,31 @@ struct URXAPTView: View {
             try FileManager.default.copyItem(at: legacy, to: destination)
         }
         return destination
+    }
+
+    private func packageStatusURL() throws -> URL {
+        let support = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return support
+            .appendingPathComponent("URXSandbox", isDirectory: true)
+            .appendingPathComponent("var", isDirectory: true)
+            .appendingPathComponent("lib", isDirectory: true)
+            .appendingPathComponent("dpkg", isDirectory: true)
+            .appendingPathComponent("status")
+    }
+
+    private func loadInstalledStatus() {
+        do {
+            let records = try URXDPKGStatusStore.load(from: packageStatusURL())
+            installedPackageIDs = Set(records.filter(\\.isInstalled).map(\\.package))
+        } catch {
+            installedPackageIDs = []
+            statusMessage = "Installed package status is unavailable: \\(error.localizedDescription)"
+        }
     }
 
     private func loadSavedIndex() {
@@ -289,10 +322,15 @@ struct URXAPTView: View {
 
 private struct URXAPTDetailsView: View {
     let package: URXPackageRecord
+    let isInstalled: Bool
 
     var body: some View {
         List {
             Section("PACKAGE") {
+                if isInstalled {
+                    Label("Installed in URX Sandbox", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
                 detailRow("Identifier", package.id)
                 detailRow("Version", package.version)
                 detailRow("Architecture", package.architecture)
