@@ -46,10 +46,11 @@ enum URXEmbeddedSigningProfile {
         }
 
         var decodeError: NSError?
-        guard let decoded = URXDecodeProvisioningProfile(profileData as NSData, &decodeError),
+        guard let decoded = URXDecodeProvisioningProfile(profileData, &decodeError),
               let payload = decoded["content"] as? Data,
               (decoded["signatureVerified"] as? Bool) == true else {
-            throw decodeError ?? ValidationError.invalidPayload
+            if let decodeError { throw decodeError }
+            throw ValidationError.invalidPayload
         }
 
         let object = try PropertyListSerialization.propertyList(from: payload, options: [], format: nil)
