@@ -2,6 +2,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Return codes: 1 = password MAC verified, 2 = no MAC (password not independently verifiable), 3 = rejected password, 0 = invalid container or missing identity.
+FOUNDATION_EXPORT int URXVerifyPKCS12Password(NSData *input, NSString *password, NSError * _Nullable * _Nullable error);
+
 /// Parses a PKCS#12 identity with OpenSSL and re-encodes it using a broadly
 /// compatible 3DES/SHA-1 PBE profile for Apple's Security.framework importer.
 /// All processing stays in memory; private-key material is never written to disk.
