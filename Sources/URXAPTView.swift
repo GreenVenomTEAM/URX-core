@@ -291,6 +291,21 @@ private struct URXAPTDetailsView: View {
                         .textSelection(.enabled)
                 }
             }
+            if !package.preDependencies.isEmpty {
+                Section("PRE-DEPENDENCIES") {
+                    ForEach(Array(package.preDependencies.enumerated()), id: \.offset) { index, group in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Group \(index + 1)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+                            Text(group.map(\.display).joined(separator: "  OR  "))
+                                .font(.footnote.monospaced())
+                                .textSelection(.enabled)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+            }
             if !package.dependencies.isEmpty {
                 Section("DEPENDENCIES") {
                     ForEach(Array(package.dependencies.enumerated()), id: \.offset) { index, group in
