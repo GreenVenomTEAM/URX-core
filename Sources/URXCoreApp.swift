@@ -480,6 +480,11 @@ struct PackageView: View {
     Description: A sample package for metadata inspection
      This is a second line of the description.
     Depends: libexample (>= 2.0), another-package | alternative-package
+    Conflicts: old-example
+    Provides: example-api
+    Replaces: legacy-example
+    Installed-Size: 128
+    Homepage: https://example.invalid
     """
 
     var body: some View {
@@ -586,6 +591,10 @@ struct PackageView: View {
                             if !metadata.section.isEmpty {
                                 metadataRow("Section", value: metadata.section)
                             }
+                            if !metadata.installedSize.isEmpty { metadataRow("Installed size", value: metadata.installedSize + " KB") }
+                            if !metadata.author.isEmpty { metadataRow("Author", value: metadata.author) }
+                            if !metadata.homepage.isEmpty { metadataRow("Homepage", value: metadata.homepage) }
+                            if !metadata.depiction.isEmpty { metadataRow("Depiction", value: metadata.depiction) }
                             if !metadata.description.isEmpty {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text("DESCRIPTION")
@@ -597,6 +606,7 @@ struct PackageView: View {
                                 }
                             }
 
+                            if !metadata.preDepends.isEmpty { metadataTextSection("PRE-DEPENDS", value: metadata.preDepends) }
                             if !metadata.dependencyGroups.isEmpty {
                                 Divider().overlay(.white.opacity(0.08))
                                 Text("DEPENDENCIES")
@@ -626,6 +636,12 @@ struct PackageView: View {
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
+                            if !metadata.conflicts.isEmpty { metadataTextSection("CONFLICTS", value: metadata.conflicts) }
+                            if !metadata.provides.isEmpty { metadataTextSection("PROVIDES", value: metadata.provides) }
+                            if !metadata.replaces.isEmpty { metadataTextSection("REPLACES", value: metadata.replaces) }
+                            if !metadata.breaks.isEmpty { metadataTextSection("BREAKS", value: metadata.breaks) }
+                            if !metadata.recommends.isEmpty { metadataTextSection("RECOMMENDS", value: metadata.recommends) }
+                            if !metadata.suggests.isEmpty { metadataTextSection("SUGGESTS", value: metadata.suggests) }
                         }
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -690,9 +706,19 @@ struct PackageView: View {
         }
     }
 
+    private func metadataTextSection(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.caption.weight(.bold)).tracking(1).foregroundStyle(.secondary)
+            Text(value).font(.footnote.monospaced()).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private func inspectMetadata() {
         do {
             metadata = try DebianControlParser.parse(controlText)
+            dataFileEntries = []
+            dataArchiveMessage = nil
             parseError = nil
         } catch {
             metadata = nil
@@ -759,6 +785,17 @@ private struct DebianPackageMetadata {
     let section: String
     let description: String
     let dependencyGroups: [DebianDependencyGroup]
+    let conflicts: String
+    let provides: String
+    let replaces: String
+    let preDepends: String
+    let breaks: String
+    let recommends: String
+    let suggests: String
+    let author: String
+    let homepage: String
+    let depiction: String
+    let installedSize: String
 }
 
 private enum DebianControlParser {
@@ -827,7 +864,18 @@ private enum DebianControlParser {
             maintainer: fields["maintainer"] ?? "",
             section: fields["section"] ?? "",
             description: (fields["description"] ?? "").replacingOccurrences(of: "\n", with: " "),
-            dependencyGroups: dependencyGroups
+            dependencyGroups: dependencyGroups,
+            conflicts: fields["conflicts"] ?? "",
+            provides: fields["provides"] ?? "",
+            replaces: fields["replaces"] ?? "",
+            preDepends: fields["pre-depends"] ?? "",
+            breaks: fields["breaks"] ?? "",
+            recommends: fields["recommends"] ?? "",
+            suggests: fields["suggests"] ?? "",
+            author: fields["author"] ?? "",
+            homepage: fields["homepage"] ?? "",
+            depiction: fields["depiction"] ?? "",
+            installedSize: fields["installed-size"] ?? ""
         )
     }
 
