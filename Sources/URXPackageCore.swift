@@ -10,6 +10,7 @@ struct URXPackageRecord: Identifiable, Hashable {
     let filename: String
     let size: Int?
     let sha256: String?
+    let preDependencies: [[URXPackageDependency]]
     let dependencies: [[URXPackageDependency]]
     let provides: [URXPackageDependency]
     let fields: [String: String]
@@ -100,6 +101,7 @@ enum URXPackageIndexParser {
                 filename: fields["filename"] ?? "",
                 size: size,
                 sha256: fields["sha256"],
+                preDependencies: try parseDependencies(fields["pre-depends"] ?? ""),
                 dependencies: try parseDependencies(fields["depends"] ?? ""),
                 provides: try parseDependencies(fields["provides"] ?? "").flatMap { $0 },
                 fields: fields
@@ -317,7 +319,7 @@ struct URXDependencyResolver {
             if visiting.contains(package.id) { throw URXDependencyResolutionError.dependencyCycle(package.id) }
             visiting.insert(package.id)
 
-            for group in package.dependencies {
+            for group in package.preDependencies + package.dependencies {
                 var selected: URXPackageRecord?
                 var alreadyInstalled = false
                 for alternative in group {
