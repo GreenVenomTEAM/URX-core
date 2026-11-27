@@ -133,25 +133,39 @@ enum URXPackageIndexParser {
                 let packageToken = value.components(separatedBy: " ").first ?? value
                 let packageName = packageToken.components(separatedBy: ":").first ?? packageToken
                 guard let open = value.firstIndex(of: "(") else {
+                    guard isValidPackageName(packageName) else {
+                        throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue)
+                    }
                     return URXPackageDependency(package: packageName, relation: nil, version: nil)
                 }
-                guard let close = value[open...].firstIndex(of: ")") else {
-                    throw URXPackageIndexError.malformedField(1)
+                guard let close = value[open...].firstIndex(of: ")"),
+                      value[value.index(after: close)...].trimmingCharacters(in: .whitespaces).isEmpty else {
+                    throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue)
                 }
                 let nameToken = value[..<open].trimmingCharacters(in: .whitespaces)
                 let name = nameToken.components(separatedBy: ":").first ?? nameToken
                 let constraint = value[value.index(after: open)..<close]
                     .trimmingCharacters(in: .whitespaces)
-                let parts = constraint.split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
-                guard !name.isEmpty, parts.count == 2 else {
-                    throw URXPackageIndexError.malformedField(1)
+                let parts = constraint.split(whereSeparator: { $0.isWhitespace })
+                guard isValidPackageName(name), parts.count == 2 else {
+                    throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue)
                 }
                 let relation = String(parts[0])
-                guard [">>", ">=", "=", "<=", "<<"].contains(relation) else {
-                    throw URXPackageIndexError.malformedField(1)
+                guard [">>", ">=", "=", "<=", "<<"].contains(relation),
+                      !parts[1].isEmpty else {
+                    throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue)
                 }
                 return URXPackageDependency(package: name, relation: relation, version: String(parts[1]))
             }
+        }
+    }
+
+    private static func isValidPackageName(_ name: String) -> Bool {
+        guard let first = name.first,
+              first.isASCII,
+              first.isLowercase || first.isNumber else { return false }
+        return name.allSatisfy { character in
+            character.isASCII && (character.isLowercase || character.isNumber || "+.-".contains(character))
         }
     }
 
@@ -193,10 +207,13 @@ enum URXPackageIndexParser {
         var output: [String] = []
         var current = ""
         var depth = 0
+        var profileDepth = 0
         for character in source {
             if character == "(" || character == "[" { depth += 1 }
             if character == ")" || character == "]" { depth = max(0, depth - 1) }
-            if character == separator && depth == 0 {
+            if depth == 0 && character == "<" { profileDepth += 1 }
+            if depth == 0 && character == ">" { profileDepth = max(0, profileDepth - 1) }
+            if character == separator && depth == 0 && profileDepth == 0 {
                 output.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
                 current = ""
             } else {
