@@ -11,6 +11,8 @@ struct URXPackageRecord: Identifiable, Hashable {
     let size: Int?
     let sha256: String?
     let dependencies: [[URXPackageDependency]]
+    let provides: [URXPackageDependency]
+    let fields: [String: String]
 
     var packageID: String { id }
 }
@@ -42,7 +44,9 @@ enum URXPackageIndexError: LocalizedError {
 
 enum URXPackageIndexParser {
     static func parse(_ source: String) throws -> [URXPackageRecord] {
-        let normalized = source.replacingOccurrences(of: "\r\n", with: "\n")
+        let normalized = source
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
         let paragraphs = normalized.components(separatedBy: "\n\n")
         var records: [URXPackageRecord] = []
 
@@ -92,29 +96,41 @@ enum URXPackageIndexParser {
                 version: try required("version"),
                 architecture: fields["architecture"] ?? "all",
                 maintainer: fields["maintainer"] ?? "",
-                description: (fields["description"] ?? "").replacingOccurrences(of: "\n", with: "\n"),
+                description: normalizeDescription(fields["description"] ?? ""),
                 filename: fields["filename"] ?? "",
                 size: size,
                 sha256: fields["sha256"],
-                dependencies: try parseDependencies(fields["depends"] ?? "")
+                dependencies: try parseDependencies(fields["depends"] ?? ""),
+                provides: try parseDependencies(fields["provides"] ?? ""),
+                fields: fields
             ))
         }
         return records
+    }
+
+    private static func normalizeDescription(_ source: String) -> String {
+        source.components(separatedBy: "\n").map { line in
+            line == "." ? "" : line
+        }.joined(separator: "\n").trimmingCharacters(in: .newlines)
     }
 
     private static func parseDependencies(_ source: String) throws -> [[URXPackageDependency]] {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         return try split(source, separator: ",").map { group in
             try split(group, separator: "|").map { raw in
-                let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !value.isEmpty else { throw URXPackageIndexError.malformedField(1) }
+                let rawValue = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rawValue.isEmpty else { throw URXPackageIndexError.malformedField(1) }
+                let value = rawValue.components(separatedBy: "[" )[0].components(separatedBy: "<")[0].trimmingCharacters(in: .whitespaces)
+                let packageToken = value.components(separatedBy: " ").first ?? value
+                let packageName = packageToken.components(separatedBy: ":").first ?? packageToken
                 guard let open = value.firstIndex(of: "(") else {
-                    return URXPackageDependency(package: value, relation: nil, version: nil)
+                    return URXPackageDependency(package: packageName, relation: nil, version: nil)
                 }
                 guard let close = value[open...].firstIndex(of: ")") else {
                     throw URXPackageIndexError.malformedField(1)
                 }
-                let name = value[..<open].trimmingCharacters(in: .whitespaces)
+                let nameToken = value[..<open].trimmingCharacters(in: .whitespaces)
+                let name = nameToken.components(separatedBy: ":").first ?? nameToken
                 let constraint = value[value.index(after: open)..<close]
                     .trimmingCharacters(in: .whitespaces)
                 let parts = constraint.split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
