@@ -226,20 +226,23 @@ struct URXRepositoryManagerView: View {
         }
     }
 
-    private func discoverPackages(baseURL: URL) async throws -> (data: Data, count: Int, location: String, sourceSHA256: String) {
+    private func discoverPackages(baseURL: URL) async throws -> (data: Data, count: Int, location: String, sourceSHA256: String, sourceSize: Int) {
         // Flat APT repositories (suite "./") publish Release and Packages at the root.
         // Validate the compressed/plain bytes against Release before accepting the index.
         let flatReleaseURL = baseURL.appendingPathComponent("Release")
-        if let releaseData = try? await fetchSmallText(flatReleaseURL),
-           let releaseText = String(data: releaseData, encoding: .utf8) {
+        let flatReleaseData = try? await fetchSmallText(flatReleaseURL)
+        if let flatReleaseData,
+           let releaseText = String(data: flatReleaseData, encoding: .utf8) {
             let checksums = parseReleaseSHA256(releaseText)
             for name in ["Packages.gz", "Packages"] {
                 guard let expected = checksums[name] else { continue }
                 let candidate = baseURL.appendingPathComponent(name)
                 guard let result = try? await fetchIndex(candidate),
-                      result.sourceSHA256 == expected.lowercased() else { continue }
+                      result.sourceSHA256 == expected.hash,
+                      result.sourceSize == expected.size else { continue }
                 return result
             }
+            throw RepositoryError.releaseIndexNotVerified
         }
 
         // Legacy flat repositories without Release metadata (metadata-only compatibility).
@@ -295,7 +298,7 @@ struct URXRepositoryManagerView: View {
         return data
     }
 
-    private func fetchIndex(_ url: URL) async throws -> (data: Data, count: Int, location: String, sourceSHA256: String) {
+    private func fetchIndex(_ url: URL) async throws -> (data: Data, count: Int, location: String, sourceSHA256: String, sourceSize: Int) {
         let (downloaded, response) = try await performRequest(url)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw RepositoryError.notFound
@@ -316,7 +319,7 @@ struct URXRepositoryManagerView: View {
         }
         let records = try URXPackageIndexParser.parse(source)
         guard !records.isEmpty else { throw RepositoryError.emptyIndex }
-        return (data, records.count, url.path, sourceSHA256)
+        return (data, records.count, url.path, sourceSHA256, downloaded.count)
     }
 
     private func performRequest(_ url: URL) async throws -> (Data, URLResponse) {
@@ -354,8 +357,8 @@ struct URXRepositoryManagerView: View {
     }
 
     /// Reads SHA256 entries from a Release file. Each entry is: hash size relative-path.
-    private func parseReleaseSHA256(_ text: String) -> [String: String] {
-        var result: [String: String] = [:]
+    private func parseReleaseSHA256(_ text: String) -> [String: (hash: String, size: Int)] {
+        var result: [String: (hash: String, size: Int)] = [:]
         var insideSHA256 = false
         for line in text.components(separatedBy: .newlines) {
             if line == "SHA256:" {
@@ -371,10 +374,11 @@ struct URXRepositoryManagerView: View {
                   parts[0].count == 64,
                   parts[0].allSatisfy({ $0.isHexDigit }),
                   let size = Int(parts[1]), size >= 0 else { continue }
-            let path = String(parts[2])
-            guard !path.hasPrefix("/"),
-                  !path.split(separator: "/").contains("..") else { continue }
-            result[path] = String(parts[0]).lowercased()
+            let rawPath = String(parts[2])
+            guard !rawPath.hasPrefix("/"),
+                  !rawPath.split(separator: "/").contains("..") else { continue }
+            let path = rawPath.hasPrefix("./") ? String(rawPath.dropFirst(2)) : rawPath
+            result[path] = (String(parts[0]).lowercased(), size)
         }
         return result
     }
@@ -431,6 +435,7 @@ struct URXRepositoryManagerView: View {
         case invalidEncoding
         case emptyIndex
         case decompressionFailed
+        case releaseIndexNotVerified
         case indexNotFound(Int)
 
         var errorDescription: String? {
@@ -440,6 +445,7 @@ struct URXRepositoryManagerView: View {
             case .invalidEncoding: return "The downloaded Packages index is not valid UTF-8 or exceeds the expanded size limit."
             case .emptyIndex: return "The discovered file contains no package records."
             case .decompressionFailed: return "The repository's gzip Packages index could not be decompressed."
+            case .releaseIndexNotVerified: return "The flat Release file did not provide a matching SHA256 entry for a supported Packages index. The index was not accepted."
             case .indexNotFound(let count): return "No supported Packages index was found. Checked flat repository indexes and \(count) standard APT index paths. This repository may use a different suite, component, architecture, or compression format."
             }
         }
