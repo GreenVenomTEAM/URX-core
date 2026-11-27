@@ -281,11 +281,17 @@ struct URXRepositoryManagerView: View {
                             .appendingPathComponent("binary-\(architecture)")
                             .appendingPathComponent(filename)
                         attempted.append(candidate.path)
-                        if let result = try? await fetchIndex(candidate) { return result }
+                        let relativePath = "\(component)/binary-\(architecture)/\(filename)"
+                        guard let expected = parseReleaseSHA256(releaseText)[relativePath],
+                              let result = try? await fetchIndex(candidate),
+                              result.sourceSHA256 == expected.hash,
+                              result.sourceSize == expected.size else { continue }
+                        return result
                     }
                 }
             }
         }
+        if !attempted.isEmpty { throw RepositoryError.releaseIndexNotVerified }
         throw RepositoryError.indexNotFound(attempted.count)
     }
 
