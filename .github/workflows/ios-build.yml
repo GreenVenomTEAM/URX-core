@@ -32,15 +32,39 @@ jobs:
 
       - name: Build for iOS Simulator
         run: |
-          xcodebuild \
+          RESULT="$RUNNER_TEMP/URXCore-Simulator.xcresult"
+          if xcodebuild \
             -project URXCore.xcodeproj \
             -scheme URXCore \
             -sdk iphonesimulator \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/URXCore-DerivedData" \
+            -resultBundlePath "$RESULT" \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build; then
+            :
+          else
+            xcrun xcresulttool get object --legacy --format json --path "$RESULT" > "$RUNNER_TEMP/URXCore-Simulator-result.json"
+            python3 - "$RUNNER_TEMP/URXCore-Simulator-result.json" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1]))
+          def walk(value, path=""):
+              if isinstance(value, dict):
+                  for key, child in value.items():
+                      next_path = f"{path}.{key}"
+                      if key in {"message", "issueDescription", "title", "failureMessage"} and isinstance(child, dict):
+                          rendered = child.get("_value")
+                          if rendered:
+                              print(f"{next_path}: {rendered}")
+                      walk(child, next_path)
+              elif isinstance(value, list):
+                  for child in value:
+                      walk(child, path)
+          walk(data)
+          PY
+            exit 1
+          fi
 
       - name: Build for physical iOS devices
         run: |
