@@ -21,6 +21,8 @@ struct RootView: View {
                     .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
                 PackageView()
                     .tabItem { Label("Packages", systemImage: "shippingbox.fill") }
+                ExtensionsView()
+                    .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension.fill") }
                 CertificateImportView()
                     .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
             }
