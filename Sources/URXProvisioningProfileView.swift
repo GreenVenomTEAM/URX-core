@@ -254,9 +254,9 @@ struct URXProvisioningProfileView: View {
     }
 
     private func restoreSavedProfile() {
-        guard summary == nil, let data = try? URXProvisioningProfileStore.load() else { return }
-        guard let data else { return }
+        guard summary == nil else { return }
         do {
+            guard let data = try URXProvisioningProfileStore.load() else { return }
             try inspect(data, persist: false)
         } catch {
             status = "A saved profile is present but is no longer usable: \(error.localizedDescription)"
