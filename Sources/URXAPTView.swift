@@ -10,6 +10,7 @@ struct URXAPTView: View {
 
     @State private var packages: [URXPackageRecord] = []
     @State private var installedPackageIDs: Set<String> = []
+    @State private var installedVersions: [String: String] = [:]
     @State private var searchText = ""
     @State private var showingImporter = false
     @State private var showingRepositories = false
@@ -65,7 +66,7 @@ struct URXAPTView: View {
                         Section("CATALOG") {
                             ForEach(filteredPackages) { package in
                                 NavigationLink {
-                                    URXAPTDetailsView(package: package, isInstalled: installedPackageIDs.contains(package.id))
+                                    URXAPTDetailsView(package: package, isInstalled: installedPackageIDs.contains(package.id), availablePackages: packages, installedVersions: installedVersions)
                                 } label: {
                                     VStack(alignment: .leading, spacing: 4) {
                                         HStack(alignment: .firstTextBaseline) {
@@ -251,6 +252,7 @@ struct URXAPTView: View {
         do {
             let records = try URXDPKGStatusStore.load(from: packageStatusURL())
             installedPackageIDs = Set(records.filter(\.isInstalled).map(\.package))
+            installedVersions = Dictionary(records.filter(\.isInstalled).map { ($0.package, $0.version) }, uniquingKeysWith: { first, _ in first })
         } catch {
             installedPackageIDs = []
             statusMessage = "Installed package status is unavailable: \(error.localizedDescription)"
@@ -332,9 +334,63 @@ struct URXAPTView: View {
 private struct URXAPTDetailsView: View {
     let package: URXPackageRecord
     let isInstalled: Bool
+    let availablePackages: [URXPackageRecord]
+    let installedVersions: [String: String]
+    @State private var installPlan: [URXPackageRecord]?
+    @State private var planError: String?
 
     var body: some View {
         List {
+            Section("PACKAGE ACTIONS") {
+                Button {
+                    do {
+                        let resolver = URXDependencyResolver(
+                            available: availablePackages,
+                            installedVersions: installedVersions,
+                            supportedArchitectures: ["iphoneos-arm64", "iphoneos-arm64e", "arm64", "all"]
+                        )
+                        installPlan = try resolver.plan(for: [package.id])
+                        planError = nil
+                    } catch {
+                        installPlan = nil
+                        planError = error.localizedDescription
+                    }
+                } label: {
+                    Label("Resolve installation plan", systemImage: "list.number")
+                }
+                Text("Creates a dependency-aware preview only. Nothing is downloaded or installed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let planError {
+                    Label(planError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .textSelection(.enabled)
+                }
+                if let installPlan {
+                    if installPlan.isEmpty {
+                        Label("Already up to date", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        ForEach(Array(installPlan.enumerated()), id: \.offset) { index, item in
+                            HStack {
+                                Text("\(index + 1).")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.id).font(.footnote.weight(.semibold))
+                                    Text(item.version).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if item.id == package.id {
+                                    Text("REQUESTED").font(.caption2.bold()).foregroundStyle(.green)
+                                } else {
+                                    Text("DEPENDENCY").font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Section("PACKAGE") {
                 if isInstalled {
                     Label("Installed in URX Sandbox", systemImage: "checkmark.circle.fill")
