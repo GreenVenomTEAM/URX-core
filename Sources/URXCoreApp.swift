@@ -29,6 +29,8 @@ struct RootView: View {
                     .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension.fill") }
                 CertificateImportView()
                     .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
+                URXProvisioningProfileView()
+                    .tabItem { Label("Profile", systemImage: "doc.badge.gearshape") }
                 URXSettingsView(runtime: extensionRuntime)
                     .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             }
