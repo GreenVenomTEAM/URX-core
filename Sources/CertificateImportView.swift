@@ -320,8 +320,7 @@ struct CertificateImportView: View {
             let certificateDER = SecCertificateCopyData(certificate) as Data
             importedItems = nil
 
-            do {
-                let profile: URXEmbeddedSigningProfileSummary
+            let profile: URXEmbeddedSigningProfileSummary
                 do {
                     profile = try URXEmbeddedSigningProfile.validate(
                         certificateDER: certificateDER,
