@@ -107,6 +107,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
         SWIFT_OBJC_BRIDGING_HEADER: Sources/URXBridging.h
+        SWIFT_OBJC_INTERFACE_HEADER_NAME: Sileo-Swift.h
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TARGET_SANDBOX"
         GCC_PREPROCESSOR_DEFINITIONS:
           - "$(inherited)"
