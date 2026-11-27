@@ -36,6 +36,7 @@ jobs:
           python3 Scripts/patch-sileo-zkswizzle-arc.py \
             "Vendor/Sileo/Sileo/UI/WhiteBlur/ZKSwizzle.m"
           python3 Scripts/patch-sileo-portable-xz.py
+          python3 Scripts/patch-sileo-storyboard.py
 
       - name: Build for iOS Simulator
         run: |
