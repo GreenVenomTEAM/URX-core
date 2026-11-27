@@ -123,6 +123,7 @@ targets:
         SWIFT_VERSION: "5.9"
         SWIFT_INSTALL_OBJC_HEADER: NO
         SWIFT_OBJC_BRIDGING_HEADER: Vendor/Sileo/Sileo/Sileo-Bridging-Header.h
+        OTHER_LDFLAGS: "$(inherited) -lbz2"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TARGET_SANDBOX"
         GCC_PREPROCESSOR_DEFINITIONS:
           - "$(inherited)"
