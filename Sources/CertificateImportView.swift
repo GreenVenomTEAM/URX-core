@@ -399,11 +399,49 @@ private enum URXCertificateVault {
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
+    static func currentCertificateDER() throws -> Data {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let encoded = result as? Data else {
+            if status == errSecItemNotFound { throw VaultError.noIdentity }
+            throw VaultError.keychain(status)
+        }
+
+        let stored = try JSONDecoder().decode(StoredIdentity.self, from: encoded)
+        let options = [kSecImportExportPassphrase as String: stored.password] as CFDictionary
+        var imported: CFArray?
+        let importStatus = SecPKCS12Import(stored.pkcs12Data as CFData, options, &imported)
+        guard importStatus == errSecSuccess,
+              let items = imported as? [[String: Any]],
+              let identity = items.first?[kSecImportItemIdentity as String] as? SecIdentity else {
+            throw VaultError.identityDecode(importStatus)
+        }
+
+        var certificate: SecCertificate?
+        let certificateStatus = SecIdentityCopyCertificate(identity, &certificate)
+        guard certificateStatus == errSecSuccess, let certificate else {
+            throw VaultError.keychain(certificateStatus)
+        }
+        return SecCertificateCopyData(certificate) as Data
+    }
+
     enum VaultError: LocalizedError {
         case keychain(OSStatus)
+        case noIdentity
+        case identityDecode(OSStatus)
+
         var errorDescription: String? {
             switch self {
             case .keychain(let status): return "iOS Keychain error (\(status))."
+            case .noIdentity: return "No signing identity is saved in URX."
+            case .identityDecode(let status): return "The saved signing identity could not be reopened (Security status: \(status))."
             }
         }
     }
