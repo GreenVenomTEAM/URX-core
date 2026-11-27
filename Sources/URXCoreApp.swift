@@ -23,6 +23,8 @@ struct RootView: View {
                     .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
                 PackageView()
                     .tabItem { Label("Packages", systemImage: "shippingbox.fill") }
+                URXAPTView()
+                    .tabItem { Label("APT", systemImage: "shippingbox") }
                 ExtensionsView(runtime: extensionRuntime)
                     .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension.fill") }
                 CertificateImportView()
