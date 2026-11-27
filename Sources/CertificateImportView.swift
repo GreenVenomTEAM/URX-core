@@ -261,7 +261,7 @@ struct CertificateImportView: View {
             // specifically reports a decode error, then verify again with Apple.
             if importStatus == errSecDecode {
                 var compatibilityError: NSError?
-                if let normalized = URXNormalizePKCS12(data as NSData, password as NSString, &compatibilityError) {
+                if let normalized = URXNormalizePKCS12(data, password, &compatibilityError) {
                     var normalizedItems: CFArray?
                     let normalizedStatus = SecPKCS12Import(normalized as CFData, options, &normalizedItems)
                     if normalizedStatus == errSecSuccess {
