@@ -12,7 +12,7 @@ enum DebianDataArchiveInspector {
         var errorDescription: String? {
             switch self {
             case .invalidDeb: return "The selected file is not a valid Debian archive."
-            case .missingDataArchive: return "The package does not contain a data archive."
+            case .missingDataArchive: return "No data.tar* member was found in the Debian archive. This may be a metadata-only package or use an unrecognized archive layout."
             case .unsupportedCompression(let format):
                 return "The data archive uses \(format) compression. This build can list uncompressed and gzip TAR archives only."
             case .invalidTar: return "The package data archive has an invalid TAR structure."
@@ -46,7 +46,7 @@ enum DebianDataArchiveInspector {
             guard end <= bytes.count else { throw InspectionError.invalidDeb }
 
             let name = rawName.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            if ["data.tar", "data.tar.gz", "data.tar.xz", "data.tar.zst", "data.tar.bz2"].contains(name) {
+            if name.hasPrefix("data.tar") {
                 dataArchive = Data(bytes[start..<end])
                 dataName = name
                 break
@@ -71,7 +71,7 @@ enum DebianDataArchiveInspector {
             defer { free(output) }
             tar = Data(bytes: output, count: length)
         } else {
-            let format = dataName.hasSuffix(".xz") ? "XZ" : dataName.hasSuffix(".zst") ? "Zstandard" : "Bzip2"
+            let format = dataName.hasSuffix(".xz") ? "XZ" : dataName.hasSuffix(".zst") ? "Zstandard" : dataName.hasSuffix(".bz2") ? "Bzip2" : dataName.hasSuffix(".lzma") || dataName.hasSuffix(".lz") ? "LZMA" : "unknown (" + dataName + ")"
             throw InspectionError.unsupportedCompression(format)
         }
 
