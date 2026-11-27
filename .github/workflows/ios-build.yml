@@ -17,6 +17,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Prepare Sileo storyboard before project generation
+        run: python3 Scripts/patch-sileo-storyboard.py
+
       - name: Generate project
         run: xcodegen generate
 
@@ -36,7 +39,6 @@ jobs:
           python3 Scripts/patch-sileo-zkswizzle-arc.py \
             "Vendor/Sileo/Sileo/UI/WhiteBlur/ZKSwizzle.m"
           python3 Scripts/patch-sileo-portable-xz.py
-          python3 Scripts/patch-sileo-storyboard.py
 
       - name: Build for iOS Simulator
         run: |
