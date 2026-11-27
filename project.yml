@@ -92,6 +92,9 @@ targets:
           - "**/*.h"
           - "AppDelegate.swift"
       - path: Vendor/SileoIntegration/SileoEmbedBootstrap.swift
+      - path: Vendor/SileoIntegration/Sileo.h
+        buildPhase: headers
+        headerVisibility: public
     dependencies:
       - package: Cosmos
         product: Cosmos
@@ -117,6 +120,7 @@ targets:
         product: SWCompression
     settings:
       base:
+        PRODUCT_NAME: Sileo
         PRODUCT_MODULE_NAME: Sileo
         PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore.sileo
         DEFINES_MODULE: YES
