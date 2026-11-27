@@ -98,10 +98,13 @@ struct URXRepositoryManagerView: View {
                     }
                 }
 
-                Section {
+                Section("SECURITY") {
                     Label("URX Core fetches repository metadata only. It does not download package archives or execute package scripts.", systemImage: "lock.shield.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text("SHA-256 checks detect index mismatches when Release metadata is available, but OpenPGP repository signatures are not yet verified. Repository metadata must therefore be treated as untrusted.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
             .navigationTitle("APT Sources")
