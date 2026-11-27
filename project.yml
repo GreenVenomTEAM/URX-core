@@ -55,13 +55,17 @@ packages:
 targets:
   URXCore:
     type: application
-    dependencies:
-      - package: OpenSSL-Package
-        product: OpenSSL
-      - target: SileoUI
     platform: iOS
     sources:
       - path: Sources
+      - path: Vendor/Sileo/Sileo
+        includes:
+          - "**/*.swift"
+          - "**/*.m"
+          - "**/*.c"
+        excludes:
+          - "AppDelegate.swift"
+      - path: Vendor/SileoIntegration/SileoEmbedBootstrap.swift
     resources:
       - path: Vendor/Sileo/Sileo
         excludes:
@@ -72,30 +76,9 @@ targets:
           - "Info.plist"
           - "**/*.entitlements"
           - "Sileo-Bridging-Header.h"
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore
-        TARGETED_DEVICE_FAMILY: "1,2"
-        SUPPORTS_MACCATALYST: NO
-        SWIFT_OBJC_BRIDGING_HEADER: Sources/URXBridging.h
-        OTHER_LDFLAGS: "$(inherited) -lz"
-  SileoUI:
-    type: framework
-    platform: iOS
-    sources:
-      - path: Vendor/Sileo/Sileo
-        includes:
-          - "**/*.swift"
-          - "**/*.m"
-          - "**/*.c"
-        excludes:
-          - "**/*.h"
-          - "AppDelegate.swift"
-      - path: Vendor/SileoIntegration/SileoEmbedBootstrap.swift
-      - path: Vendor/SileoIntegration/Sileo.h
-        buildPhase: headers
-        headerVisibility: public
     dependencies:
+      - package: OpenSSL-Package
+        product: OpenSSL
       - package: Cosmos
         product: Cosmos
       - package: SQLite.swift
@@ -120,13 +103,10 @@ targets:
         product: SWCompression
     settings:
       base:
-        PRODUCT_NAME: Sileo
-        PRODUCT_MODULE_NAME: Sileo
-        PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore.sileo
-        DEFINES_MODULE: YES
-        SWIFT_VERSION: "5.9"
-        SWIFT_INSTALL_OBJC_HEADER: NO
-        OTHER_LDFLAGS: "$(inherited) -lbz2"
+        PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/URXBridging.h
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TARGET_SANDBOX"
         GCC_PREPROCESSOR_DEFINITIONS:
           - "$(inherited)"
@@ -135,7 +115,10 @@ targets:
           - "$(inherited)"
           - "$(SRCROOT)/Vendor/Sileo/Sileo/Contrib"
           - "$(SRCROOT)/Vendor/Sileo/Sileo/UI/WhiteBlur"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/Backend/C Contrib"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/Backend/Control File Parser"
+          - "$(SRCROOT)/Vendor/Sileo/Sileo/Deps/libzstd"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/CContrib"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/ControlFileParser"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/libzstd"
-        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        OTHER_LDFLAGS: "$(inherited) -lz -lbz2"
