@@ -1,9 +1,8 @@
 import SwiftUI
 import UIKit
-import Sileo
 
 /// Hosts the upstream Sileo storyboard inside URX Core.
-/// The Sileo source is compiled as an embedded framework; no second app is launched.
+/// Sileo sources are compiled directly into the app target; no second app is launched.
 struct URXOriginalSileoView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
         let storyboard = UIStoryboard(name: "Main", bundle: .main)
