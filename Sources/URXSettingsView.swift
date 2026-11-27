@@ -33,6 +33,29 @@ struct URXSettingsView: View {
                     Text("Environment")
                 }
 
+                Section("Appearance") {
+                    Picker("URX theme", selection: $runtime.selectedThemeID) {
+                        ForEach(runtime.themes) { theme in
+                            HStack {
+                                Circle().fill(Color(hexRGB: theme.accentHex)).frame(width: 10, height: 10)
+                                Text(theme.name)
+                            }
+                            .tag(theme.id)
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        ForEach(runtime.themes) { theme in
+                            Circle()
+                                .fill(Color(hexRGB: theme.accentHex))
+                                .frame(height: 28)
+                                .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 1))
+                        }
+                    }
+                    Text("Extensions with an accent color can override the selected theme accent while enabled.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Runtime status") {
                     LabeledContent("Extensions", value: "\(runtime.extensions.count)")
                     LabeledContent("Enabled", value: "\(runtime.enabledIDs.count)")
@@ -89,5 +112,12 @@ struct URXSettingsView: View {
             .background(Color.black)
         }
         .tint(runtime.activeAccent)
+    }
+}
+
+private extension Color {
+    init(hexRGB: String) {
+        let value = UInt64(hexRGB, radix: 16) ?? 0x659BFF
+        self.init(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
     }
 }
