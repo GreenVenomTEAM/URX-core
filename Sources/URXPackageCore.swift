@@ -34,12 +34,15 @@ enum URXPackageIndexError: LocalizedError {
     case malformedField(Int)
     case missingField(String)
     case invalidSize(String)
+    case malformedDependency(package: String, field: String, value: String)
 
     var errorDescription: String? {
         switch self {
         case .malformedField(let line): return "Malformed package index near line \(line)."
         case .missingField(let name): return "Package index entry is missing \(name)."
         case .invalidSize(let value): return "Invalid package size: \(value)."
+        case .malformedDependency(let package, let field, let value):
+            return "Unsupported or malformed \(field) dependency in \(package): \(value.prefix(180))"
         }
     }
 }
@@ -93,18 +96,20 @@ enum URXPackageIndexParser {
                 size = nil
             }
 
+            let packageID = try required("package")
+            let version = try required("version")
             records.append(URXPackageRecord(
-                id: try required("package"),
-                version: try required("version"),
+                id: packageID,
+                version: version,
                 architecture: fields["architecture"] ?? "all",
                 maintainer: fields["maintainer"] ?? "",
                 description: normalizeDescription(fields["description"] ?? ""),
                 filename: fields["filename"] ?? "",
                 size: size,
                 sha256: fields["sha256"],
-                preDependencies: try parseDependencies(fields["pre-depends"] ?? ""),
-                dependencies: try parseDependencies(fields["depends"] ?? ""),
-                provides: try parseDependencies(fields["provides"] ?? "").flatMap { $0 },
+                preDependencies: try parseDependencies(fields["pre-depends"] ?? "", package: packageID, field: "Pre-Depends"),
+                dependencies: try parseDependencies(fields["depends"] ?? "", package: packageID, field: "Depends"),
+                provides: try parseDependencies(fields["provides"] ?? "", package: packageID, field: "Provides").flatMap { $0 },
                 fields: fields,
                 repositoryBaseURL: repositoryBaseURL
             ))
@@ -118,12 +123,12 @@ enum URXPackageIndexParser {
         }.joined(separator: "\n").trimmingCharacters(in: .newlines)
     }
 
-    private static func parseDependencies(_ source: String) throws -> [[URXPackageDependency]] {
+    private static func parseDependencies(_ source: String, package: String, field: String) throws -> [[URXPackageDependency]] {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         return try split(source, separator: ",").map { group in
             try split(group, separator: "|").map { raw in
                 let rawValue = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !rawValue.isEmpty else { throw URXPackageIndexError.malformedField(1) }
+                guard !rawValue.isEmpty else { throw URXPackageIndexError.malformedDependency(package: package, field: field, value: rawValue) }
                 let value = stripDependencyQualifiers(rawValue).trimmingCharacters(in: .whitespaces)
                 let packageToken = value.components(separatedBy: " ").first ?? value
                 let packageName = packageToken.components(separatedBy: ":").first ?? packageToken
