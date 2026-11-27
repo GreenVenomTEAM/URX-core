@@ -14,6 +14,7 @@ struct URXPackageRecord: Identifiable, Hashable {
     let dependencies: [[URXPackageDependency]]
     let provides: [URXPackageDependency]
     let fields: [String: String]
+    let repositoryBaseURL: URL?
 
     var packageID: String { id }
 }
@@ -44,7 +45,7 @@ enum URXPackageIndexError: LocalizedError {
 }
 
 enum URXPackageIndexParser {
-    static func parse(_ source: String) throws -> [URXPackageRecord] {
+    static func parse(_ source: String, repositoryBaseURL: URL? = nil) throws -> [URXPackageRecord] {
         let normalized = source
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
@@ -104,7 +105,8 @@ enum URXPackageIndexParser {
                 preDependencies: try parseDependencies(fields["pre-depends"] ?? ""),
                 dependencies: try parseDependencies(fields["depends"] ?? ""),
                 provides: try parseDependencies(fields["provides"] ?? "").flatMap { $0 },
-                fields: fields
+                fields: fields,
+                repositoryBaseURL: repositoryBaseURL
             ))
         }
         return records
