@@ -23,3 +23,5 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.greenvn.urxcore
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/URXZlib.h
+        OTHER_LDFLAGS: "$(inherited) -lz"
