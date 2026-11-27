@@ -101,7 +101,7 @@ enum URXPackageIndexParser {
                 size: size,
                 sha256: fields["sha256"],
                 dependencies: try parseDependencies(fields["depends"] ?? ""),
-                provides: try parseDependencies(fields["provides"] ?? ""),
+                provides: try parseDependencies(fields["provides"] ?? "").flatMap { $0 },
                 fields: fields
             ))
         }
@@ -297,7 +297,7 @@ struct URXDependencyResolver {
                     if package.id == dependency.package {
                         return URXDebianVersion.satisfies(installed: package.version, relation: dependency.relation, required: dependency.version)
                     }
-                    return package.provides.flatMap { $0 }.contains { provided in
+                    return package.provides.contains { provided in
                         guard provided.package == dependency.package else { return false }
                         if dependency.relation == nil { return true }
                         guard let providedVersion = provided.version else { return false }
