@@ -420,9 +420,10 @@ enum URXCertificateVault {
         let importStatus = SecPKCS12Import(stored.pkcs12Data as CFData, options, &imported)
         guard importStatus == errSecSuccess,
               let items = imported as? [[String: Any]],
-              let identity = items.first?[kSecImportItemIdentity as String] as? SecIdentity else {
+              let identityValue = items.first?[kSecImportItemIdentity as String] else {
             throw VaultError.identityDecode(importStatus)
         }
+        let identity = identityValue as! SecIdentity
 
         var certificate: SecCertificate?
         let certificateStatus = SecIdentityCopyCertificate(identity, &certificate)
