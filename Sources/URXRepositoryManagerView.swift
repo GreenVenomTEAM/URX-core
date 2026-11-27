@@ -237,15 +237,33 @@ struct URXRepositoryManagerView: View {
         if let flatReleaseData,
            let releaseText = String(data: flatReleaseData, encoding: .utf8) {
             let checksums = parseReleaseSHA256(releaseText)
-            for name in ["Packages.gz", "Packages"] {
+            var diagnostics = [String]()
+            let supportedNames = ["Packages.gz", "Packages"]
+            for name in supportedNames {
                 guard let expected = checksums[name] else { continue }
                 let candidate = baseURL.appendingPathComponent(name)
-                guard let result = try? await fetchIndex(candidate),
-                      result.sourceSHA256 == expected.hash,
-                      result.sourceSize == expected.size else { continue }
-                return result
+                do {
+                    let result = try await fetchIndex(candidate)
+                    guard result.sourceSHA256 == expected.hash else {
+                        diagnostics.append("\(name): SHA256 mismatch (Release \(expected.hash), downloaded \(result.sourceSHA256))")
+                        continue
+                    }
+                    guard result.sourceSize == expected.size else {
+                        diagnostics.append("\(name): size mismatch (Release \(expected.size), downloaded \(result.sourceSize))")
+                        continue
+                    }
+                    return result
+                } catch {
+                    diagnostics.append("\(name): \(error.localizedDescription)")
+                }
             }
-            throw RepositoryError.releaseIndexNotVerified
+            if diagnostics.isEmpty {
+                let packageEntries = checksums.keys.filter { $0.lowercased().contains("packages") }.sorted()
+                diagnostics.append(packageEntries.isEmpty
+                    ? "Release contains no usable SHA256 entries for Packages or Packages.gz."
+                    : "Release advertises only: \(packageEntries.joined(separator: ", ")). URX currently supports Packages and Packages.gz.")
+            }
+            throw RepositoryError.releaseIndexNotVerified(diagnostics.joined(separator: " | "))
         }
 
         // Legacy flat repositories without Release metadata (metadata-only compatibility).
@@ -294,7 +312,9 @@ struct URXRepositoryManagerView: View {
                 }
             }
         }
-        if !attempted.isEmpty { throw RepositoryError.releaseIndexNotVerified }
+        if !attempted.isEmpty {
+            throw RepositoryError.releaseIndexNotVerified("Release metadata was found, but none of the \(attempted.count) supported Packages.gz/Packages paths matched its SHA256 and size entries.")
+        }
         throw RepositoryError.indexNotFound(attempted.count)
     }
 
@@ -334,7 +354,10 @@ struct URXRepositoryManagerView: View {
     private func performRequest(_ url: URL) async throws -> (Data, URLResponse) {
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
-        request.setValue("URX-Core-APT/0.2", forHTTPHeaderField: "User-Agent")
+        request.setValue("URX-Core-APT/0.3", forHTTPHeaderField: "User-Agent")
+        // Ask the server for the exact representation named by the APT index.
+        // Transparent HTTP content-encoding must not change bytes before SHA256 validation.
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         return try await URLSession.shared.data(for: request)
     }
 
@@ -369,23 +392,31 @@ struct URXRepositoryManagerView: View {
     private func parseReleaseSHA256(_ text: String) -> [String: (hash: String, size: Int)] {
         var result: [String: (hash: String, size: Int)] = [:]
         var insideSHA256 = false
-        for line in text.components(separatedBy: .newlines) {
-            if line == "SHA256:" {
-                insideSHA256 = true
+
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+
+            // Release checksum sections are RFC822-style multiline fields.
+            // Trim before recognizing the header so CRLF, tabs, or harmless
+            // surrounding whitespace do not make the SHA256 section invisible.
+            if rawLine.first?.isWhitespace == false, line.hasSuffix(":") {
+                let fieldName = String(line.dropLast()).lowercased()
+                insideSHA256 = fieldName == "sha256"
                 continue
             }
-            if !line.hasPrefix(" ") && line.contains(":") {
-                insideSHA256 = false
-            }
+
             guard insideSHA256 else { continue }
             let parts = line.split(whereSeparator: { $0.isWhitespace })
             guard parts.count == 3,
                   parts[0].count == 64,
                   parts[0].allSatisfy({ $0.isHexDigit }),
                   let size = Int(parts[1]), size >= 0 else { continue }
+
             let rawPath = String(parts[2])
             guard !rawPath.hasPrefix("/"),
                   !rawPath.split(separator: "/").contains("..") else { continue }
+
             let path = rawPath.hasPrefix("./") ? String(rawPath.dropFirst(2)) : rawPath
             result[path] = (String(parts[0]).lowercased(), size)
         }
@@ -444,7 +475,7 @@ struct URXRepositoryManagerView: View {
         case invalidEncoding
         case emptyIndex
         case decompressionFailed
-        case releaseIndexNotVerified
+        case releaseIndexNotVerified(String)
         case indexNotFound(Int)
 
         var errorDescription: String? {
@@ -454,7 +485,7 @@ struct URXRepositoryManagerView: View {
             case .invalidEncoding: return "The downloaded Packages index is not valid UTF-8 or exceeds the expanded size limit."
             case .emptyIndex: return "The discovered file contains no package records."
             case .decompressionFailed: return "The repository's gzip Packages index could not be decompressed."
-            case .releaseIndexNotVerified: return "The flat Release file did not provide a matching SHA256 entry for a supported Packages index. The index was not accepted."
+            case .releaseIndexNotVerified(let detail): return "The repository Release metadata could not be matched to a supported Packages index. The index was not accepted. Details: \(detail)"
             case .indexNotFound(let count): return "No supported Packages index was found. Checked flat repository indexes and \(count) standard APT index paths. This repository may use a different suite, component, architecture, or compression format."
             }
         }
