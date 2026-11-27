@@ -139,7 +139,7 @@ final class URXSandboxRuntime: ObservableObject {
 struct URXSandboxView: View {
     @StateObject private var runtime = URXSandboxRuntime()
     @State private var selectedApp: URXSandboxAppRecord?
-    @State private var showingSileoInfo = false
+    @State private var showingSileo = false
 
     private let accent = Color(red: 0.35, green: 0.95, blue: 0.55)
 
@@ -190,9 +190,8 @@ struct URXSandboxView: View {
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Sandbox")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showingSileoInfo) {
-                sileoInfoSheet
-                    .presentationDetents([.medium, .large])
+            .sheet(isPresented: $showingSileo) {
+                URXAPTView(displayTitle: "Sileo")
                     .presentationDragIndicator(.visible)
             }
         }
@@ -290,7 +289,7 @@ struct URXSandboxView: View {
 
     private var sileoCard: some View {
         Button {
-            showingSileoInfo = true
+            showingSileo = true
         } label: {
             HStack(spacing: 14) {
                 ZStack {
@@ -306,7 +305,7 @@ struct URXSandboxView: View {
                     Text("Original package manager • first target")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("INTEGRATION PLANNED")
+                    Text("OPEN PACKAGE CENTER")
                         .font(.caption2.bold())
                         .tracking(0.7)
                         .foregroundStyle(.orange)
@@ -322,30 +321,4 @@ struct URXSandboxView: View {
         .buttonStyle(.plain)
     }
 
-    private var sileoInfoSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                Label("Sileo integration", systemImage: "shippingbox.fill")
-                    .font(.title2.bold())
-                Text("Sileo is the first application we are targeting for URX Sandbox. This entry is an integration target, not a fake or reimplemented Sileo screen.")
-                    .font(.body)
-                Text("Next: map Sileo's UI and backend dependencies, then identify which components can run in URX's contained environment and which require replacement by safe app-local services.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Label("No package scripts or native tweak code will be executed by this app-contained runtime.", systemImage: "lock.shield.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(22)
-            .navigationTitle("Sileo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { showingSileoInfo = false }
-                }
-            }
-        }
-        .tint(accent)
-    }
 }
