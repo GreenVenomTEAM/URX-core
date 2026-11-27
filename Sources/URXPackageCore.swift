@@ -124,7 +124,7 @@ enum URXPackageIndexParser {
             try split(group, separator: "|").map { raw in
                 let rawValue = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !rawValue.isEmpty else { throw URXPackageIndexError.malformedField(1) }
-                let value = rawValue.components(separatedBy: "[" )[0].components(separatedBy: "<")[0].trimmingCharacters(in: .whitespaces)
+                let value = stripDependencyQualifiers(rawValue).trimmingCharacters(in: .whitespaces)
                 let packageToken = value.components(separatedBy: " ").first ?? value
                 let packageName = packageToken.components(separatedBy: ":").first ?? packageToken
                 guard let open = value.firstIndex(of: "(") else {
@@ -148,6 +148,40 @@ enum URXPackageIndexParser {
                 return URXPackageDependency(package: name, relation: relation, version: String(parts[1]))
             }
         }
+    }
+
+    /// Removes architecture and build-profile restrictions without truncating
+    /// version operators such as << or <= inside parenthesized constraints.
+    private static func stripDependencyQualifiers(_ source: String) -> String {
+        var result = ""
+        var parenthesisDepth = 0
+        var skipping: Character?
+        for character in source {
+            if let closing = skipping {
+                if character == closing { skipping = nil }
+                continue
+            }
+            if character == "(" {
+                parenthesisDepth += 1
+                result.append(character)
+                continue
+            }
+            if character == ")" {
+                parenthesisDepth = max(0, parenthesisDepth - 1)
+                result.append(character)
+                continue
+            }
+            if parenthesisDepth == 0 && character == "[" {
+                skipping = "]"
+                continue
+            }
+            if parenthesisDepth == 0 && character == "<" {
+                skipping = ">"
+                continue
+            }
+            result.append(character)
+        }
+        return result
     }
 
     private static func split(_ source: String, separator: Character) -> [String] {
