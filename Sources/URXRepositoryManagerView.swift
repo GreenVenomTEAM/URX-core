@@ -346,9 +346,24 @@ struct URXRepositoryManagerView: View {
               let source = String(data: data, encoding: .utf8) else {
             throw RepositoryError.invalidEncoding
         }
-        let records = try URXPackageIndexParser.parse(source)
-        guard !records.isEmpty else { throw RepositoryError.emptyIndex }
-        return (data, records.count, url.path, sourceSHA256, downloaded.count)
+
+        do {
+            let records = try URXPackageIndexParser.parse(source)
+            guard !records.isEmpty else { throw RepositoryError.emptyIndex }
+            return (data, records.count, url.path, sourceSHA256, downloaded.count)
+        } catch let error as URXPackageIndexError {
+            let responseURL = response.url?.absoluteString ?? url.absoluteString
+            let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? "unknown"
+            let preview = source
+                .prefix(160)
+                .map { character in
+                    character.isNewline || character.isWhitespace ? " " : String(character)
+                }
+                .joined()
+            throw RepositoryError.invalidPackageIndex(
+                "Requested \(url.lastPathComponent), received \(responseURL) (Content-Type: \(contentType)). \(error.localizedDescription) First bytes: \(preview)"
+            )
+        }
     }
 
     private func performRequest(_ url: URL) async throws -> (Data, URLResponse) {
@@ -475,6 +490,7 @@ struct URXRepositoryManagerView: View {
         case invalidEncoding
         case emptyIndex
         case decompressionFailed
+        case invalidPackageIndex(String)
         case releaseIndexNotVerified(String)
         case indexNotFound(Int)
 
@@ -485,6 +501,7 @@ struct URXRepositoryManagerView: View {
             case .invalidEncoding: return "The downloaded Packages index is not valid UTF-8 or exceeds the expanded size limit."
             case .emptyIndex: return "The discovered file contains no package records."
             case .decompressionFailed: return "The repository's gzip Packages index could not be decompressed."
+            case .invalidPackageIndex(let detail): return "The downloaded file is not a valid Debian Packages index. Details: \(detail)"
             case .releaseIndexNotVerified(let detail): return "The repository Release metadata could not be matched to a supported Packages index. The index was not accepted. Details: \(detail)"
             case .indexNotFound(let count): return "No supported Packages index was found. Checked flat repository indexes and \(count) standard APT index paths. This repository may use a different suite, component, architecture, or compression format."
             }
