@@ -49,6 +49,9 @@ packages:
   SWCompression:
     url: https://github.com/tsolomko/SWCompression.git
     exactVersion: 4.8.6
+  BitByteData:
+    url: https://github.com/tsolomko/BitByteData.git
+    exactVersion: 2.0.4
 targets:
   URXCore:
     type: application
