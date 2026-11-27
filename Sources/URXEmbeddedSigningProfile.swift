@@ -58,6 +58,7 @@ enum URXEmbeddedSigningProfile {
               let uuid = profile["UUID"] as? String,
               let expiration = profile["ExpirationDate"] as? Date,
               let teams = profile["TeamIdentifier"] as? [String],
+              let appPrefixes = profile["ApplicationIdentifierPrefix"] as? [String],
               let entitlements = profile["Entitlements"] as? [String: Any],
               let appIdentifier = entitlements["application-identifier"] as? String,
               let certificates = profile["DeveloperCertificates"] as? [Data],
@@ -73,11 +74,11 @@ enum URXEmbeddedSigningProfile {
         guard components.count >= 2 else { throw ValidationError.missingEntitlements }
         let appIDPrefix = String(components[0])
         let authorizedBundle = components.dropFirst().joined(separator: ".")
+        guard appPrefixes.contains(appIDPrefix) else { throw ValidationError.teamMismatch }
         guard authorizedBundle == "*" || bundleIdentifier == authorizedBundle ||
               (authorizedBundle.hasSuffix(".*") && bundleIdentifier.hasPrefix(String(authorizedBundle.dropLast()) + ".")) else {
             throw ValidationError.appIdentifierMismatch
         }
-        guard appIDPrefix == team else { throw ValidationError.teamMismatch }
 
         return URXEmbeddedSigningProfileSummary(
             name: name,
