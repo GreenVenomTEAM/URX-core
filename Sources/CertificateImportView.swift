@@ -1,0 +1,478 @@
+import SwiftUI
+import Security
+import UniformTypeIdentifiers
+
+struct CertificateImportView: View {
+    @State private var showingImporter = false
+    @State private var selectedFile: URL?
+    @State private var password = ""
+    @State private var status = "Choose a .p12 or .pfx file to begin."
+    @State private var isSuccess = false
+    @State private var isChecking = false
+    @State private var hasStoredIdentity = false
+    @FocusState private var passwordFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.green)
+                        Text("Signing identity")
+                            .font(.largeTitle.bold())
+                        Text("Select a PKCS#12 file. Enter its password if it has one; otherwise leave the field blank. URX checks the identity against this app’s embedded provisioning profile.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        stepLabel("01", "SELECT FILE")
+                        Button {
+                            passwordFocused = false
+                            showingImporter = true
+                        } label: {
+                            Label(selectedFile == nil ? "Import .p12 / .pfx" : "Choose another file", systemImage: "folder.badge.plus")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 15)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+
+                        if let selectedFile {
+                            Label(selectedFile.lastPathComponent, systemImage: "doc.fill")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        } else {
+                            Text("No file selected")
+                                .font(.footnote)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
+
+                    if selectedFile != nil {
+                        VStack(alignment: .leading, spacing: 14) {
+                            stepLabel("02", "PASSWORD (IF REQUIRED)")
+                            SecureField("P12 password (optional)", text: $password)
+                                .textContentType(.password)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .submitLabel(.done)
+                                .focused($passwordFocused)
+                                .onSubmit { verifyAndDismissKeyboard() }
+                                .padding(15)
+                                .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 13))
+
+                            Button {
+                                verifyAndDismissKeyboard()
+                            } label: {
+                                HStack {
+                                    if isChecking { ProgressView().tint(.black) }
+                                    Label(isChecking ? "Importing…" : "Import & verify identity", systemImage: "checkmark.shield.fill")
+                                }
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                            .disabled(isChecking)
+                        }
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
+                    }
+
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: isSuccess ? "checkmark.circle.fill" : "info.circle.fill")
+                            .foregroundStyle(isSuccess ? .green : .secondary)
+                        Text(status)
+                            .font(.footnote)
+                            .foregroundStyle(isSuccess ? .green : .secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+
+                    if hasStoredIdentity {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Signing identity saved", systemImage: "checkmark.seal.fill")
+                                .font(.headline)
+                                .foregroundStyle(.green)
+                            Text("The PKCS#12 container and its password are stored as a single item in the device-only iOS Keychain.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Button(role: .destructive) {
+                                do {
+                                    try URXCertificateVault.remove()
+                                    hasStoredIdentity = false
+                                    status = "Saved signing identity removed from the Keychain."
+                                    isSuccess = false
+                                } catch {
+                                    status = "Could not remove saved identity: \(error.localizedDescription)"
+                                    isSuccess = false
+                                }
+                            } label: {
+                                Label("Remove saved identity", systemImage: "trash")
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Privacy & security", systemImage: "lock.shield.fill")
+                            .font(.headline)
+                        Text("The file is processed locally. The PKCS#12 data and password are saved together in the device-only iOS Keychain. Nothing is uploaded.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Text("Importing a signing identity does not grant jailbreak privileges or access outside the app sandbox.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 30)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Identity")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { passwordFocused = false }
+                        .tint(.green)
+                }
+            }
+            .onAppear {
+                hasStoredIdentity = URXCertificateVault.containsIdentity()
+            }
+            .fileImporter(
+                isPresented: $showingImporter,
+                allowedContentTypes: [UTType(filenameExtension: "p12") ?? .data, UTType(filenameExtension: "pfx") ?? .data],
+                allowsMultipleSelection: false,
+                onCompletion: handleFileSelection
+            )
+            .onTapGesture {
+                passwordFocused = false
+            }
+        }
+    }
+
+    private func stepLabel(_ number: String, _ title: String) -> some View {
+        HStack(spacing: 9) {
+            Text(number)
+                .font(.caption.bold().monospacedDigit())
+                .foregroundStyle(.green)
+                .padding(7)
+                .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            Text(title)
+                .font(.caption.weight(.bold))
+                .tracking(1.1)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func verifyAndDismissKeyboard() {
+        passwordFocused = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            inspectIdentity()
+        }
+    }
+
+    private func handleFileSelection(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else {
+                status = "No file selected."
+                isSuccess = false
+                return
+            }
+            selectedFile = url
+            password = ""
+            status = "File selected. Enter its password if required, or leave the field blank."
+            isSuccess = false
+        case .failure(let error):
+            status = "Could not select file: \(error.localizedDescription)"
+            isSuccess = false
+        }
+    }
+
+    private func inspectIdentity() {
+        guard let url = selectedFile else { return }
+
+        isChecking = true
+        defer { isChecking = false }
+
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            // Coordinate access for files supplied by the Files app or cloud providers.
+            var coordinationError: NSError?
+            var readError: Error?
+            var coordinatedData: Data?
+            let coordinator = NSFileCoordinator(filePresenter: nil)
+            coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readableURL in
+                do {
+                    coordinatedData = try Data(contentsOf: readableURL)
+                } catch {
+                    readError = error
+                }
+            }
+
+            if let coordinationError { throw coordinationError }
+            if let readError { throw readError }
+            guard let data = coordinatedData, !data.isEmpty else {
+                status = "The selected file is empty or could not be read."
+                isSuccess = false
+                return
+            }
+
+            var passwordVerificationError: NSError?
+            let passwordVerification = URXVerifyPKCS12Password(data, password, &passwordVerificationError)
+            guard passwordVerification != 0 else {
+                status = passwordVerificationError?.localizedDescription ?? "The PKCS#12 container could not be verified."
+                isSuccess = false
+                return
+            }
+            if passwordVerification == 3 {
+                status = passwordVerificationError?.localizedDescription ?? "The PKCS#12 password was rejected."
+                isSuccess = false
+                return
+            }
+
+            var importedItems: CFArray?
+            let options = [kSecImportExportPassphrase as String: password] as CFDictionary
+            var identityData = data
+            var importStatus = SecPKCS12Import(data as CFData, options, &importedItems)
+
+            // SideStore may export PKCS#12 encryption profiles that Apple's
+            // importer rejects. Normalize only after the native importer
+            // specifically reports a decode error, then verify again with Apple.
+            if importStatus == errSecDecode {
+                var compatibilityError: NSError?
+                if let normalized = URXNormalizePKCS12(data, password, &compatibilityError) {
+                    var normalizedItems: CFArray?
+                    let normalizedStatus = SecPKCS12Import(normalized as CFData, options, &normalizedItems)
+                    if normalizedStatus == errSecSuccess {
+                        importedItems = normalizedItems
+                        identityData = normalized as Data
+                        importStatus = errSecSuccess
+                    } else {
+                        importedItems = nil
+                        status = "The compatibility parser read the identity, but Apple Security still rejected the normalized container (status: \(normalizedStatus))."
+                        isSuccess = false
+                        return
+                    }
+                } else {
+                    importedItems = nil
+                    let detail = compatibilityError?.localizedDescription ?? "No parser details were returned."
+                    status = "Apple Security could not decode this PKCS#12 file, and the compatibility parser could not normalize it: \(detail)"
+                    isSuccess = false
+                    return
+                }
+            }
+
+            guard importStatus == errSecSuccess,
+                  let items = importedItems as? [[String: Any]],
+                  !items.isEmpty else {
+                status = securityErrorMessage(for: importStatus, byteCount: data.count, looksLikeASN1Sequence: data.first == 0x30)
+                isSuccess = false
+                importedItems = nil
+                return
+            }
+
+            guard let identityItem = items.first(where: { $0[kSecImportItemIdentity as String] != nil }) else {
+                importedItems = nil
+                status = "The PKCS#12 file was read, but it did not contain a signing identity with a private key."
+                isSuccess = false
+                return
+            }
+
+            let identity = identityItem[kSecImportItemIdentity as String] as! SecIdentity
+            var certificate: SecCertificate?
+            let certificateStatus = SecIdentityCopyCertificate(identity, &certificate)
+            guard certificateStatus == errSecSuccess, let certificate else {
+                importedItems = nil
+                status = "Apple Security could not extract the certificate from this identity (status: \(certificateStatus))."
+                isSuccess = false
+                return
+            }
+            let subject = SecCertificateCopySubjectSummary(certificate) as String?
+            let certificateDER = SecCertificateCopyData(certificate) as Data
+            importedItems = nil
+
+            let profile: URXEmbeddedSigningProfileSummary
+                do {
+                    profile = try URXEmbeddedSigningProfile.validate(
+                        certificateDER: certificateDER,
+                        bundleIdentifier: Bundle.main.bundleIdentifier ?? ""
+                    )
+                } catch {
+                    status = "The PKCS#12 identity was read, but it does not match URX's embedded provisioning profile: \(error.localizedDescription)"
+                    isSuccess = false
+                    return
+                }
+
+                do {
+                    try URXCertificateVault.save(pkcs12Data: identityData, password: password, subject: subject)
+                } catch {
+                    status = "The identity and profile match, but Keychain storage failed: \(error.localizedDescription)"
+                    isSuccess = false
+                    return
+                }
+                hasStoredIdentity = true
+                password = ""
+                let passwordNote = passwordVerification == 2
+                    ? " The container has no PKCS#12 MAC, so its password could not be independently verified."
+                    : " The PKCS#12 password MAC was verified."
+                status = "Identity verified against URX's embedded profile (\(profile.name), Team \(profile.teamIdentifier)) and securely saved in Keychain.\(passwordNote)"
+                if let subject { status += " Certificate: \(subject)" }
+                isSuccess = true
+        } catch {
+            status = "Could not read selected file: \(error.localizedDescription)"
+            isSuccess = false
+        }
+    }
+
+    private func securityErrorMessage(for status: OSStatus, byteCount: Int, looksLikeASN1Sequence: Bool) -> String {
+        switch status {
+        case errSecAuthFailed:
+            return "The file was recognized, but its password was rejected or its contents are damaged (errSecAuthFailed). Recheck the password and the exported file."
+        case errSecDecode:
+            if !looksLikeASN1Sequence {
+                return "This file does not look like a PKCS#12 data container. It is \(byteCount) bytes and does not begin with the expected ASN.1 sequence marker. Re-export the full P12 from SideStore and select that file."
+            }
+            return "The file begins like an ASN.1 container (\(byteCount) bytes), but Apple Security could not decode it as PKCS#12 (errSecDecode). The export may be malformed or use an unsupported encoding."
+        case errSecParam:
+            return "Security rejected the import parameters (errSecParam)."
+        case errSecSuccess:
+            return "The file was read, but no identity was returned."
+        default:
+            return "PKCS#12 verification failed. Security status: \(status)."
+        }
+    }
+}
+
+
+enum URXCertificateVault {
+    private static let service = "team.greenvn.urx.signing-identity"
+    private static let account = "pkcs12-container"
+
+    private struct StoredIdentity: Codable {
+        let pkcs12Data: Data
+        let password: String
+        let subject: String?
+        let importedAt: Date
+    }
+
+    static func save(pkcs12Data: Data, password: String, subject: String?) throws {
+        let payload = StoredIdentity(pkcs12Data: pkcs12Data, password: password, subject: subject, importedAt: Date())
+        let encoded = try JSONEncoder().encode(payload)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: encoded,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else { throw VaultError.keychain(updateStatus) }
+
+        var addQuery = query
+        attributes.forEach { addQuery[$0.key] = $0.value }
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else { throw VaultError.keychain(addStatus) }
+    }
+
+    static func remove() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw VaultError.keychain(status) }
+    }
+
+    static func containsIdentity() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: false,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func currentCertificateDER() throws -> Data {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let encoded = result as? Data else {
+            if status == errSecItemNotFound { throw VaultError.noIdentity }
+            throw VaultError.keychain(status)
+        }
+
+        let stored = try JSONDecoder().decode(StoredIdentity.self, from: encoded)
+        let options = [kSecImportExportPassphrase as String: stored.password] as CFDictionary
+        var imported: CFArray?
+        let importStatus = SecPKCS12Import(stored.pkcs12Data as CFData, options, &imported)
+        guard importStatus == errSecSuccess,
+              let items = imported as? [[String: Any]],
+              let identityValue = items.first?[kSecImportItemIdentity as String] else {
+            throw VaultError.identityDecode(importStatus)
+        }
+        let identity = identityValue as! SecIdentity
+
+        var certificate: SecCertificate?
+        let certificateStatus = SecIdentityCopyCertificate(identity, &certificate)
+        guard certificateStatus == errSecSuccess, let certificate else {
+            throw VaultError.keychain(certificateStatus)
+        }
+        return SecCertificateCopyData(certificate) as Data
+    }
+
+    enum VaultError: LocalizedError {
+        case keychain(OSStatus)
+        case noIdentity
+        case identityDecode(OSStatus)
+
+        var errorDescription: String? {
+            switch self {
+            case .keychain(let status): return "iOS Keychain error (\(status))."
+            case .noIdentity: return "No signing identity is saved in URX."
+            case .identityDecode(let status): return "The saved signing identity could not be reopened (Security status: \(status))."
+            }
+        }
+    }
+}
