@@ -338,10 +338,41 @@ private struct URXAPTDetailsView: View {
     let installedVersions: [String: String]
     @State private var installPlan: [URXPackageRecord]?
     @State private var planError: String?
+    @State private var isDownloadingArchive = false
+    @State private var archiveMessage: String?
 
     var body: some View {
         List {
             Section("PACKAGE ACTIONS") {
+                Button {
+                    isDownloadingArchive = true
+                    archiveMessage = nil
+                    Task {
+                        do {
+                            let archiveURL = try await URXPackageArchiveStore.download(package: package)
+                            archiveMessage = "Verified archive saved: \(archiveURL.lastPathComponent)"
+                        } catch {
+                            archiveMessage = error.localizedDescription
+                        }
+                        isDownloadingArchive = false
+                    }
+                } label: {
+                    if isDownloadingArchive {
+                        Label("Downloading and verifying…", systemImage: "arrow.down.circle")
+                    } else {
+                        Label("Download and verify .deb", systemImage: "arrow.down.to.line")
+                    }
+                }
+                .disabled(isDownloadingArchive || package.repositoryBaseURL == nil || package.filename.isEmpty || package.sha256?.count != 64)
+                Text("Downloads the archive into the URX Sandbox cache and verifies its size and SHA-256. It does not unpack or install it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let archiveMessage {
+                    Text(archiveMessage)
+                        .font(.footnote)
+                        .foregroundStyle(archiveMessage.hasPrefix("Verified archive saved:") ? .green : .orange)
+                        .textSelection(.enabled)
+                }
                 Button {
                     do {
                         let resolver = URXDependencyResolver(
