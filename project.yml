@@ -127,4 +127,8 @@ targets:
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/ControlFileParser"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/libzstd"
           - "$(SRCROOT)/Vendor/SileoIntegration/Headers/liblzma"
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/Vendor/SileoIntegration/Headers/liblzma"
+        OTHER_LDFLAGS: "$(inherited) -llzma.5"
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
