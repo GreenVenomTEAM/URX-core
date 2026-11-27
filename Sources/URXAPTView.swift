@@ -195,9 +195,24 @@ struct URXAPTView: View {
             appropriateFor: nil,
             create: true
         )
-        let directory = support.appendingPathComponent("URXAPT", isDirectory: true)
+        let sandbox = support.appendingPathComponent("URXSandbox", isDirectory: true)
+        let directory = sandbox
+            .appendingPathComponent("var", isDirectory: true)
+            .appendingPathComponent("lib", isDirectory: true)
+            .appendingPathComponent("apt", isDirectory: true)
+            .appendingPathComponent("lists", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("Packages")
+        let destination = directory.appendingPathComponent("Packages")
+
+        // Migrate the earlier standalone APT cache into the unified Sandbox database.
+        let legacy = support
+            .appendingPathComponent("URXAPT", isDirectory: true)
+            .appendingPathComponent("Packages")
+        if !FileManager.default.fileExists(atPath: destination.path),
+           FileManager.default.fileExists(atPath: legacy.path) {
+            try FileManager.default.copyItem(at: legacy, to: destination)
+        }
+        return destination
     }
 
     private func loadSavedIndex() {
