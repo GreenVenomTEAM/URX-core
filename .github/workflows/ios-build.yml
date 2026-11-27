@@ -31,6 +31,8 @@ jobs:
             "$RUNNER_TEMP/URXCore-DerivedData/SourcePackages/checkouts/Alderis/Alderis/ColorPickerInnerViewController.swift"
           python3 Scripts/patch-sileo-dpkgversion.py \
             "Vendor/Sileo/Sileo/Backend/C Contrib/dpkgversion.h"
+          python3 Scripts/patch-sileo-zkswizzle-arc.py \
+            "Vendor/Sileo/Sileo/UI/WhiteBlur/ZKSwizzle.m"
 
       - name: Build for iOS Simulator
         run: |
