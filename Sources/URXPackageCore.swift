@@ -292,12 +292,23 @@ struct URXDependencyResolver {
 
         func candidate(for dependency: URXPackageDependency) -> URXPackageRecord? {
             available
-                .filter {
-                    $0.id == dependency.package &&
-                    (supportedArchitectures.contains($0.architecture) || $0.architecture == "all") &&
-                    URXDebianVersion.satisfies(installed: $0.version, relation: dependency.relation, required: dependency.version)
+                .filter { package in
+                    guard supportedArchitectures.contains(package.architecture) || package.architecture == "all" else { return false }
+                    if package.id == dependency.package {
+                        return URXDebianVersion.satisfies(installed: package.version, relation: dependency.relation, required: dependency.version)
+                    }
+                    return package.provides.flatMap { $0 }.contains { provided in
+                        guard provided.package == dependency.package else { return false }
+                        if dependency.relation == nil { return true }
+                        guard let providedVersion = provided.version else { return false }
+                        return URXDebianVersion.satisfies(installed: providedVersion, relation: dependency.relation, required: dependency.version)
+                    }
                 }
-                .sorted { URXDebianVersion.compare($0.version, $1.version) == .orderedDescending }
+                .sorted {
+                    if $0.id == dependency.package && $1.id != dependency.package { return true }
+                    if $1.id == dependency.package && $0.id != dependency.package { return false }
+                    return URXDebianVersion.compare($0.version, $1.version) == .orderedDescending
+                }
                 .first
         }
 
