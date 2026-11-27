@@ -22,7 +22,7 @@ struct CertificateImportView: View {
                             .foregroundStyle(.green)
                         Text("Signing identity")
                             .font(.largeTitle.bold())
-                        Text("Select a PKCS#12 file and enter its password. URX will verify the identity and securely save it in the iOS Keychain for later use.")
+                        Text("Select a PKCS#12 file and enter its password. URX checks it against the provisioning profile embedded in this installed app, then securely saves the identity in the iOS Keychain.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -302,16 +302,25 @@ struct CertificateImportView: View {
             let identity = identityItem[kSecImportItemIdentity as String] as! SecIdentity
             var certificate: SecCertificate?
             let certificateStatus = SecIdentityCopyCertificate(identity, &certificate)
-            let subject = certificateStatus == errSecSuccess
-                ? certificate.flatMap { SecCertificateCopySubjectSummary($0) as String? }
-                : nil
+            guard certificateStatus == errSecSuccess, let certificate else {
+                importedItems = nil
+                status = "Apple Security could not extract the certificate from this identity (status: \(certificateStatus))."
+                isSuccess = false
+                return
+            }
+            let subject = SecCertificateCopySubjectSummary(certificate) as String?
+            let certificateDER = SecCertificateCopyData(certificate) as Data
             importedItems = nil
 
             do {
+                let profile = try URXEmbeddedSigningProfile.validate(
+                    certificateDER: certificateDER,
+                    bundleIdentifier: Bundle.main.bundleIdentifier ?? ""
+                )
                 try URXCertificateVault.save(pkcs12Data: identityData, password: password, subject: subject)
                 hasStoredIdentity = true
                 password = ""
-                status = "Signing identity imported and securely saved in the iOS Keychain."
+                status = "Identity verified against URX's embedded profile (\(profile.name), Team \(profile.teamIdentifier)) and securely saved in Keychain."
                 if let subject { status += " Certificate: \(subject)" }
                 isSuccess = true
             } catch {
