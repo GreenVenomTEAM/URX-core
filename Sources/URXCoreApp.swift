@@ -12,6 +12,8 @@ struct URXCoreApp: App {
 }
 
 struct RootView: View {
+    @StateObject private var extensionRuntime = URXExtensionRuntime()
+
     var body: some View {
         GeometryReader { geometry in
             TabView {
@@ -21,12 +23,12 @@ struct RootView: View {
                     .tabItem { Label("Guest", systemImage: "externaldrive.fill") }
                 PackageView()
                     .tabItem { Label("Packages", systemImage: "shippingbox.fill") }
-                ExtensionsView()
+                ExtensionsView(runtime: extensionRuntime)
                     .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension.fill") }
                 CertificateImportView()
                     .tabItem { Label("Identity", systemImage: "checkmark.seal.fill") }
             }
-            .tint(Color(red: 0.35, green: 0.95, blue: 0.55))
+            .tint(extensionRuntime.activeAccent)
             .frame(width: geometry.size.width, height: geometry.size.height)
             .background(Color.black.ignoresSafeArea())
         }
