@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct URXCoreApp: App {
@@ -465,6 +466,8 @@ struct PackageView: View {
     @State private var controlText = ""
     @State private var metadata: DebianPackageMetadata?
     @State private var parseError: String?
+    @State private var showingPackageImporter = false
+    @State private var importedFilename: String?
 
     private let sample = """
     Package: example-tool
@@ -498,13 +501,26 @@ struct PackageView: View {
                                 .tracking(1)
                                 .foregroundStyle(.secondary)
                             Spacer()
+                            Button("Open .deb") {
+                                showingPackageImporter = true
+                            }
+                            .font(.caption.weight(.semibold))
+                            .tint(.green)
                             Button("Load example") {
                                 controlText = sample
+                                importedFilename = nil
                                 metadata = nil
                                 parseError = nil
                             }
                             .font(.caption.weight(.semibold))
                             .tint(.green)
+                        }
+
+                        if let importedFilename {
+                            Label(importedFilename, systemImage: "archivebox")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
 
                         TextEditor(text: $controlText)
@@ -624,6 +640,12 @@ struct PackageView: View {
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Packages")
             .navigationBarTitleDisplayMode(.large)
+            .fileImporter(
+                isPresented: $showingPackageImporter,
+                allowedContentTypes: [.data],
+                allowsMultipleSelection: false,
+                onCompletion: handlePackageImport
+            )
         }
     }
 
@@ -643,6 +665,34 @@ struct PackageView: View {
     private func inspectMetadata() {
         do {
             metadata = try DebianControlParser.parse(controlText)
+            parseError = nil
+        } catch {
+            metadata = nil
+            parseError = error.localizedDescription
+        }
+    }
+
+    private func handlePackageImport(_ result: Result<[URL], Error>) {
+        do {
+            let urls = try result.get()
+            guard let url = urls.first else { return }
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess { url.stopAccessingSecurityScopedResource() }
+            }
+
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            let fileSize = (attributes[.size] as? NSNumber)?.intValue ?? 0
+            guard fileSize > 0, fileSize <= 64 * 1024 * 1024 else {
+                throw DebianArchiveReader.ArchiveError.archiveTooLarge
+            }
+
+            let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+            let extractedControl = try DebianArchiveReader.controlText(from: data)
+            let parsed = try DebianControlParser.parse(extractedControl)
+            controlText = extractedControl
+            metadata = parsed
+            importedFilename = url.lastPathComponent
             parseError = nil
         } catch {
             metadata = nil
