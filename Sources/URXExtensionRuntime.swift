@@ -173,7 +173,7 @@ final class URXExtensionRuntime: ObservableObject {
 }
 
 struct ExtensionsView: View {
-    @StateObject private var runtime = URXExtensionRuntime()
+    @ObservedObject var runtime: URXExtensionRuntime
     @State private var showingImporter = false
     @State private var importError: String?
 
