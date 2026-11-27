@@ -220,7 +220,7 @@ struct URXRepositoryManagerView: View {
                 let cachedURL = try cacheURL(for: item)
                 guard let cachedData = try? Data(contentsOf: cachedURL),
                       let cachedSource = String(data: cachedData, encoding: .utf8) else { continue }
-                allPackages.append(contentsOf: try URXPackageIndexParser.parse(cachedSource))
+                allPackages.append(contentsOf: try URXPackageIndexParser.parse(cachedSource, repositoryBaseURL: URL(string: item.indexURL)))
             }
             onPackagesLoaded(uniquePackages(allPackages))
             statusMessage = "Found \(discovered.count) packages at \(discovered.location)."
