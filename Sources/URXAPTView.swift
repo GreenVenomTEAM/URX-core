@@ -5,6 +5,7 @@ struct URXAPTView: View {
     @State private var packages: [URXPackageRecord] = []
     @State private var searchText = ""
     @State private var showingImporter = false
+    @State private var showingRepositories = false
     @State private var sourceName: String?
     @State private var statusMessage: String?
     @State private var errorMessage: String?
@@ -96,6 +97,11 @@ struct URXAPTView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button {
+                            showingRepositories = true
+                        } label: {
+                            Label("Manage APT sources", systemImage: "server.rack")
+                        }
+                        Button {
                             showingImporter = true
                         } label: {
                             Label("Import Packages index", systemImage: "square.and.arrow.down")
@@ -107,6 +113,18 @@ struct URXAPTView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingRepositories) {
+                URXRepositoryManagerView { repositoryPackages in
+                    if !repositoryPackages.isEmpty {
+                        packages = repositoryPackages
+                        sourceName = "APT repositories"
+                        statusMessage = "Catalog contains \(repositoryPackages.count) repository packages"
+                    } else if sourceName == "APT repositories" {
+                        packages = []
+                        sourceName = nil
                     }
                 }
             }
